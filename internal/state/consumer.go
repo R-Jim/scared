@@ -29,7 +29,7 @@ func (c Composer) OperateStateLifeCycle() {
 			log.Fatal(err)
 		}
 
-		for _, gate := range node.ActiveGates {
+		for _, gate := range node.Gates {
 			if data := gate.eventProducerFunc(id, c.projectorManager, nil); data != nil {
 				resultEvents = append(resultEvents, InitEvent(gate.unlockByEventEffect, id, data))
 				break
@@ -44,7 +44,9 @@ func (c Composer) OperateStateLifeCycle() {
 	}
 }
 
-func (c Composer) RequestStateTransition(entityID uuid.UUID, effect string, inputData interface{}) (bool, error) {
+type SystemInputComposer Composer
+
+func (c SystemInputComposer) RequestStateTransition(entityID uuid.UUID, effect string, inputData interface{}) (bool, error) {
 	events, err := c.store.GetEventsByEntityID(entityID)
 	if err != nil {
 		return false, err
@@ -55,7 +57,7 @@ func (c Composer) RequestStateTransition(entityID uuid.UUID, effect string, inpu
 		return false, err
 	}
 
-	for _, gate := range node.PassiveGates {
+	for _, gate := range node.Gates {
 		if effect != gate.unlockByEventEffect {
 			continue
 		}

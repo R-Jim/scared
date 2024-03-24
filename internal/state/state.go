@@ -16,9 +16,9 @@ type Gate struct {
 }
 
 type Node struct {
-	State        string // State identifier
-	ActiveGates  []Gate // Active gates will run unlock condition check every life cycle
-	PassiveGates []Gate // Passive gates only run when invoke by external caller
+	State string // State identifier
+	Gates []Gate // gates will run unlock condition check every life cycle
+	// PassiveGates []Gate // Passive gates only run when invoke by external caller
 }
 
 // transitionSet is used to map out the entire state machine and it traversable nodes
@@ -47,8 +47,7 @@ func NewStateMachine(entityType string, nodes []Node) StateMachine {
 			resultTransitionSet = []transitionSet{}
 		}
 
-		gates := append(node.ActiveGates, node.PassiveGates...)
-		for _, gate := range gates {
+		for _, gate := range node.Gates {
 			var isAlreadyExist bool
 
 			// validate if effect transition already in transition set

@@ -4,7 +4,6 @@ import (
 	"log"
 	"testing"
 	"thief/internal/model"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -72,8 +71,19 @@ func (p EnemyProjector) Project(identifier uuid.UUID, field string) interface{} 
 					log.Fatalln(err)
 				}
 				return targetData
-			case EnemyEventInit.Effect:
+			case EnemyEventInit.Effect, EnemyEventForceTargetRelease.Effect:
 				return targetData{}
+			}
+		case "TargetReleaseLastInput":
+			switch event.Effect {
+			case EnemyEventForceTargetRelease.Effect:
+				targetReleaseData, err := ParseData[forceTargetReleaseData](event)
+				if err != nil {
+					log.Fatalln(err)
+				}
+				return targetReleaseData
+			default:
+				return forceTargetReleaseData{}
 			}
 		}
 	}
@@ -90,18 +100,66 @@ func (p EnemyProjector) ListIdentifiers() []uuid.UUID {
 	return identifiers
 }
 
+type ControllerProjector struct {
+	controllerStore *Store
+}
+
+func NewControllerProjector(controllerStore *Store) Projector {
+	return ControllerProjector{
+		controllerStore: controllerStore,
+	}
+}
+
+func (p ControllerProjector) Project(identifier uuid.UUID, field string) interface{} {
+	events, err := p.controllerStore.GetEventsByEntityID(identifier)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	for i := len(events) - 1; i >= 0; i-- {
+		event := events[i]
+		switch field {
+		case "EnemyTargetReleaseInput":
+			switch event.Effect {
+			case ControllerEventEnemyTargetRelease.Effect:
+				input, err := ParseData[ControllerInput](event)
+				if err != nil {
+					log.Fatalln(err)
+				}
+				return input
+			case ControllerEventInit.Effect:
+				return ControllerInput{}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (p ControllerProjector) ListIdentifiers() []uuid.UUID {
+	identifiers := []uuid.UUID{}
+	for id, _ := range p.controllerStore.GetEvents() {
+		identifiers = append(identifiers, id)
+	}
+
+	return identifiers
+}
+
 func Test_EnemyStateMachine(t *testing.T) {
 	enemyStore := NewStore()
+	controllerStore := NewStore()
 
 	enemyStateMachine := NewStateMachine(EnemyPatrolStateMachine.entityType, EnemyPatrolStateMachine.nodes)
 	enemyID := uuid.New()
 
 	enemyStore.AppendEvent(InitEvent(EnemyEventInit.Effect, enemyID, nil))
+	controllerStore.AppendEvent(InitEvent(ControllerEventInit.Effect, enemyID, nil))
 
 	pm := ProjectorManager{
 		EntityProjectorMap: map[string]Projector{
-			"PLAYER": NewPlayerProjector(),
-			"ENEMY":  NewEnemyProjector(&enemyStore),
+			"PLAYER":     NewPlayerProjector(),
+			"ENEMY":      NewEnemyProjector(&enemyStore),
+			"CONTROLLER": NewControllerProjector(&controllerStore),
 		},
 	}
 
@@ -109,6 +167,12 @@ func Test_EnemyStateMachine(t *testing.T) {
 		store:            &enemyStore,
 		projectorManager: pm,
 		stateMachine:     &enemyStateMachine,
+	}
+
+	controllerComposer := SystemInputComposer{
+		store:            &controllerStore,
+		projectorManager: pm,
+		stateMachine:     &ControllerStateMachine,
 	}
 
 	for i := 0; i < 4; i++ {
@@ -125,34 +189,54 @@ func Test_EnemyStateMachine(t *testing.T) {
 		t.Fatal("no target for release")
 	}
 
-	result, err := enemyComposer.RequestStateTransition(enemyID, EnemyEventTargetRelease.Effect, nil)
+	result, err := controllerComposer.RequestStateTransition(enemyID, ControllerEventEnemyTargetRelease.Effect, nil)
 	if err != nil || !result {
 		t.Fatal("force release target failed")
 	}
+
+	input := pm.GetEntityProjector("CONTROLLER").Project(enemyID, "EnemyTargetReleaseInput").(ControllerInput)
+	if input.ID == uuid.Nil {
+		t.Fatal("should have controller input")
+	}
+
+	enemyComposer.OperateStateLifeCycle()
 
 	target = pm.GetEntityProjector("ENEMY").Project(enemyID, "Target").(targetData)
 	if target.id != uuid.Nil {
 		t.Fatal("should force release target")
 	}
+
+	// double check, auto re-assign target
+	enemyComposer.OperateStateLifeCycle()
+
+	target = pm.GetEntityProjector("ENEMY").Project(enemyID, "Target").(targetData)
+	if target.id == uuid.Nil {
+		t.Fatal("double check, should auto re-assign target")
+	}
+
+	position := pm.GetEntityProjector("ENEMY").Project(enemyID, "Position").(model.Position)
+	if position.X != 3 {
+		t.Fatal("double check, should remain position")
+	}
 }
 
-type affectedTargetCondition struct {
-	entityTypes []string
-	position    model.Position
-	startAt     time.Time
-	endAt       time.Time
-}
+// type affectedTargetCondition struct {
+// 	entityTypes []string
+// 	position    model.Position
+// 	startAt     time.Time
+// 	endAt       time.Time
+// }
 
-type damageData struct {
-	value int
-}
+// type damageData struct {
+// 	value int
+// }
 
-type strikeData struct {
-	id                      uuid.UUID
-	sourceID                uuid.UUIDs
-	affectedTargetCondition affectedTargetCondition
-	damageData              damageData
-}
+// type strikeData struct {
+// 	id                      uuid.UUID
+// 	sourceID                uuid.UUIDs
+// 	affectedTargetCondition affectedTargetCondition
+// 	damageData              damageData
+// }
 
 /*
 	logic implementation for player strike enemy/enemy strike player

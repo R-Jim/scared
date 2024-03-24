@@ -55,33 +55,21 @@ func (p EnemyProjector) Project(identifier uuid.UUID, field string) interface{} 
 		case "Position":
 			switch event.Effect {
 			case EnemyEventMove.Effect:
-				position, err := ParseData[model.Position](event)
-				if err != nil {
-					log.Fatalln(err)
-				}
-				return position
+				return ParseData[model.Position](event)
 			case EnemyEventInit.Effect:
 				return model.Position{}
 			}
 		case "Target":
 			switch event.Effect {
 			case EnemyEventTargetRelease.Effect, EnemyEventTargetAcquired.Effect:
-				targetData, err := ParseData[targetData](event)
-				if err != nil {
-					log.Fatalln(err)
-				}
-				return targetData
+				return ParseData[targetData](event)
 			case EnemyEventInit.Effect, EnemyEventForceTargetRelease.Effect:
 				return targetData{}
 			}
 		case "TargetReleaseLastInput":
 			switch event.Effect {
 			case EnemyEventForceTargetRelease.Effect:
-				targetReleaseData, err := ParseData[forceTargetReleaseData](event)
-				if err != nil {
-					log.Fatalln(err)
-				}
-				return targetReleaseData
+				return ParseData[forceTargetReleaseData](event)
 			default:
 				return forceTargetReleaseData{}
 			}
@@ -122,11 +110,7 @@ func (p ControllerProjector) Project(identifier uuid.UUID, field string) interfa
 		case "EnemyTargetReleaseInput":
 			switch event.Effect {
 			case ControllerEventEnemyTargetRelease.Effect:
-				input, err := ParseData[ControllerInput](event)
-				if err != nil {
-					log.Fatalln(err)
-				}
-				return input
+				return ParseData[ControllerInput](event)
 			case ControllerEventInit.Effect:
 				return ControllerInput{}
 			}
@@ -149,21 +133,21 @@ func Test_EnemyStateMachine(t *testing.T) {
 	enemyStore := NewStore()
 	controllerStore := NewStore()
 
-	enemyStateMachine := NewStateMachine(EnemyPatrolStateMachine.entityType, EnemyPatrolStateMachine.nodes)
+	enemyStateMachine := NewStateMachine(EnemyPatrolStateMachine.entityType, "IDLE", EnemyPatrolStateMachine.nodes)
 	enemyID := uuid.New()
 
-	enemyStore.AppendEvent(InitEvent(EnemyEventInit.Effect, enemyID, nil))
-	controllerStore.AppendEvent(InitEvent(ControllerEventInit.Effect, enemyID, nil))
+	enemyStore.AppendEvent(initEvent(EnemyEventInit.Effect, enemyID, nil))
+	controllerStore.AppendEvent(initEvent(ControllerEventInit.Effect, enemyID, nil))
 
 	pm := ProjectorManager{
-		EntityProjectorMap: map[string]Projector{
+		entityProjectorMap: map[string]Projector{
 			"PLAYER":     NewPlayerProjector(),
 			"ENEMY":      NewEnemyProjector(&enemyStore),
 			"CONTROLLER": NewControllerProjector(&controllerStore),
 		},
 	}
 
-	enemyComposer := Composer{
+	enemyComposer := LifeCycleComposer{
 		store:            &enemyStore,
 		projectorManager: pm,
 		stateMachine:     &enemyStateMachine,
@@ -172,11 +156,11 @@ func Test_EnemyStateMachine(t *testing.T) {
 	controllerComposer := SystemInputComposer{
 		store:            &controllerStore,
 		projectorManager: pm,
-		stateMachine:     &ControllerStateMachine,
+		stateMachine:     &controllerStateMachine,
 	}
 
 	for i := 0; i < 4; i++ {
-		enemyComposer.OperateStateLifeCycle()
+		enemyComposer.Operate()
 
 		position := pm.GetEntityProjector("ENEMY").Project(enemyID, "Position").(model.Position)
 		if position.X != i {
@@ -189,7 +173,7 @@ func Test_EnemyStateMachine(t *testing.T) {
 		t.Fatal("no target for release")
 	}
 
-	result, err := controllerComposer.RequestStateTransition(enemyID, ControllerEventEnemyTargetRelease.Effect, nil)
+	result, err := controllerComposer.TransitionByInput(enemyID, ControllerEventEnemyTargetRelease.Effect, nil)
 	if err != nil || !result {
 		t.Fatal("force release target failed")
 	}
@@ -199,7 +183,7 @@ func Test_EnemyStateMachine(t *testing.T) {
 		t.Fatal("should have controller input")
 	}
 
-	enemyComposer.OperateStateLifeCycle()
+	enemyComposer.Operate()
 
 	target = pm.GetEntityProjector("ENEMY").Project(enemyID, "Target").(targetData)
 	if target.id != uuid.Nil {
@@ -207,7 +191,7 @@ func Test_EnemyStateMachine(t *testing.T) {
 	}
 
 	// double check, auto re-assign target
-	enemyComposer.OperateStateLifeCycle()
+	enemyComposer.Operate()
 
 	target = pm.GetEntityProjector("ENEMY").Project(enemyID, "Target").(targetData)
 	if target.id == uuid.Nil {

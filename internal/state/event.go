@@ -1,19 +1,20 @@
 package state
 
 import (
-	"fmt"
+	"log"
 	"reflect"
 	"time"
 
 	"github.com/google/uuid"
-	pkgerrors "github.com/pkg/errors"
 )
+
+type Effect string
 
 type Event struct {
 	ID       uuid.UUID
 	EntityID uuid.UUID
 
-	Effect string
+	Effect Effect
 	Data   interface{}
 
 	FromState string
@@ -22,10 +23,10 @@ type Event struct {
 	CreatedAt time.Time
 }
 
-func ParseData[T interface{}](e Event) (T, error) {
+func ParseData[T interface{}](e Event) T {
 	data, ok := e.Data.(T)
 	if !ok {
-		return data, pkgerrors.WithStack(fmt.Errorf("failed to parse data for effect[%s]: %s", e.Effect, reflect.TypeOf(data)))
+		log.Fatalf("failed to parse data for effect[%s]: %s", e.Effect, reflect.TypeOf(data))
 	}
-	return data, nil
+	return data
 }

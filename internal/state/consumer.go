@@ -6,32 +6,23 @@ import (
 	"github.com/google/uuid"
 )
 
-type Composer struct {
+type composer struct {
 	store            *Store
 	projectorManager ProjectorManager
-	stateMachine     *StateMachine
+	stateMachine     *stateMachine
 }
 
-func NewComposer(store *Store, projectorManager ProjectorManager, stateMachine *StateMachine) Composer {
-	return Composer{
-		store:            store,
-		projectorManager: projectorManager,
-		stateMachine:     stateMachine,
-	}
-}
+type LifeCycleComposer composer
 
-func (c Composer) OperateStateLifeCycle() {
+func (c LifeCycleComposer) Operate() {
 	resultEvents := []Event{}
 
 	for id, events := range c.store.GetEvents() {
-		node, err := c.stateMachine.GetNode(id, events)
-		if err != nil {
-			log.Fatal(err)
-		}
+		state := c.stateMachine.getState(events)
 
-		for _, gate := range node.Gates {
-			if data := gate.eventProducerFunc(id, c.projectorManager, nil); data != nil {
-				resultEvents = append(resultEvents, InitEvent(gate.unlockByEventEffect, id, data))
+		for effect, gate := range c.stateMachine.nodes[state] {
+			if data := gate.outputProducerFunc(id, c.projectorManager); data != nil {
+				resultEvents = append(resultEvents, initEvent(effect, id, data))
 				break
 			}
 		}
@@ -44,26 +35,26 @@ func (c Composer) OperateStateLifeCycle() {
 	}
 }
 
-type SystemInputComposer Composer
+type SystemInputComposer composer
 
-func (c SystemInputComposer) RequestStateTransition(entityID uuid.UUID, effect string, inputData interface{}) (bool, error) {
+func (c SystemInputComposer) TransitionByInput(entityID uuid.UUID, effect Effect, inputData interface{}) (bool, error) {
 	events, err := c.store.GetEventsByEntityID(entityID)
 	if err != nil {
 		return false, err
 	}
 
-	node, err := c.stateMachine.GetNode(entityID, events)
+	state := c.stateMachine.getState(events)
 	if err != nil {
 		return false, err
 	}
 
-	for _, gate := range node.Gates {
-		if effect != gate.unlockByEventEffect {
+	for unlockByEventEffect, gate := range c.stateMachine.nodes[state] {
+		if effect != unlockByEventEffect {
 			continue
 		}
 
-		if data := gate.eventProducerFunc(entityID, c.projectorManager, inputData); data != nil {
-			if err := c.store.AppendEvent(InitEvent(gate.unlockByEventEffect, entityID, data)); err != nil {
+		if data := gate.outputProducerFunc(entityID, c.projectorManager); data != nil {
+			if err := c.store.AppendEvent(initEvent(unlockByEventEffect, entityID, data)); err != nil {
 				return false, err
 			}
 			return true, nil

@@ -1,37 +1,31 @@
 package state
 
 import (
-	"fmt"
+	"log"
 	"reflect"
 
 	"github.com/google/uuid"
-	pkgerrors "github.com/pkg/errors"
 )
 
-func FieldValue[T interface{}](pm ProjectorManager, id uuid.UUID, entityName, fieldName string) (T, error) {
+func FieldValue[T interface{}](pm ProjectorManager, id uuid.UUID, entityName, fieldName string) T {
 	projector := pm.GetEntityProjector(entityName)
 
 	data, ok := projector.Project(id, fieldName).(T)
 	if !ok {
-		return data, pkgerrors.WithStack(fmt.Errorf("failed to parse data for effect: %s", reflect.TypeOf(data)))
+		log.Fatalf("failed to parse data for effect: %s", reflect.TypeOf(data))
 	}
-	return data, nil
+	return data
 }
 
-func FieldValues[T interface{}](pm ProjectorManager, entityName, fieldName string) ([]T, []uuid.UUID, error) {
+func FieldValues[T interface{}](pm ProjectorManager, entityName, fieldName string) ([]T, []uuid.UUID) {
 	projector := pm.GetEntityProjector(entityName)
 
 	ids := projector.ListIdentifiers()
 	results := make([]T, len(ids))
 
 	for i, id := range ids {
-		data, err := FieldValue[T](pm, id, entityName, fieldName)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		results[i] = data
+		results[i] = FieldValue[T](pm, id, entityName, fieldName)
 	}
 
-	return results, ids, nil
+	return results, ids
 }

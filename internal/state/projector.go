@@ -8,9 +8,15 @@ type Projector interface {
 }
 
 type ProjectorManager struct {
-	EntityProjectorMap map[string]Projector
+	entityProjectorMap map[string]Projector
+}
+
+func NewProjectorManager(projectorMapping map[string]Projector) ProjectorManager {
+	return ProjectorManager{
+		entityProjectorMap: projectorMapping,
+	}
 }
 
 func (m ProjectorManager) GetEntityProjector(entityType string) Projector {
-	return m.EntityProjectorMap[entityType]
+	return m.entityProjectorMap[entityType]
 }

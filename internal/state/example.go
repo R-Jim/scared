@@ -38,7 +38,7 @@ var (
 	}
 )
 
-func InitEvent(effect string, entityID uuid.UUID, data interface{}) Event {
+func initEvent(effect Effect, entityID uuid.UUID, data interface{}) Event {
 	return Event{
 		ID:       uuid.New(),
 		Effect:   effect,
@@ -56,131 +56,97 @@ type forceTargetReleaseData struct {
 	inputID uuid.UUID
 }
 
-var EnemyPatrolStates = []Node{
-	{
-		State: "IDLE",
-		Gates: []Gate{
-			{
-				nextState:           "TARGET_ACQUIRED",
-				unlockByEventEffect: EnemyEventTargetAcquired.Effect,
-				eventProducerFunc: func(selfID uuid.UUID, pm ProjectorManager, _ interface{}) interface{} {
-					playerPositions, playerIDs, err := FieldValues[model.Position](pm, "PLAYER", "Position")
-					if err != nil {
-						log.Fatalln(err)
-					}
+var EnemyPatrolStates = map[State]map[Effect]gate{
+	"IDLE": {
+		EnemyEventTargetAcquired.Effect: {
+			nextState: "TARGET_ACQUIRED",
+			outputProducerFunc: func(selfID uuid.UUID, pm ProjectorManager) interface{} {
+				playerPositions, playerIDs := FieldValues[model.Position](pm, "PLAYER", "Position")
 
-					enemyPosition, err := FieldValue[model.Position](pm, selfID, EntityTypeEnemy, "Position")
-					if err != nil {
-						log.Fatalln(err)
-					}
+				enemyPosition := FieldValue[model.Position](pm, selfID, EntityTypeEnemy, "Position")
 
-					if len(playerIDs) < 1 {
-						return nil
-					}
+				if len(playerIDs) < 1 {
+					return nil
+				}
 
-					isInRange := math.Sqrt(math.Pow(float64(enemyPosition.X-playerPositions[0].X), 2)) <= 5
-					if !isInRange {
-						return nil
-					}
+				isInRange := math.Sqrt(math.Pow(float64(enemyPosition.X-playerPositions[0].X), 2)) <= 5
+				if !isInRange {
+					return nil
+				}
 
-					return targetData{
-						targetType: "PLAYER",
-						id:         playerIDs[0],
-					}
-				},
+				return targetData{
+					targetType: "PLAYER",
+					id:         playerIDs[0],
+				}
 			},
 		},
 	},
-	{
-		State: "TARGET_ACQUIRED",
-		Gates: []Gate{
-			{
-				nextState:           "IDLE",
-				unlockByEventEffect: EnemyEventForceTargetRelease.Effect,
-				eventProducerFunc: func(selfID uuid.UUID, pm ProjectorManager, _ interface{}) interface{} {
-					targetReleaseData, err := FieldValue[forceTargetReleaseData](pm, selfID, EntityTypeEnemy, "TargetReleaseLastInput")
-					if err != nil {
-						log.Fatalln(err)
-					}
+	"TARGET_ACQUIRED": {
+		EnemyEventForceTargetRelease.Effect: {
+			nextState: "IDLE",
+			outputProducerFunc: func(selfID uuid.UUID, pm ProjectorManager) interface{} {
+				targetReleaseData := FieldValue[forceTargetReleaseData](pm, selfID, EntityTypeEnemy, "TargetReleaseLastInput")
 
-					input, err := FieldValue[ControllerInput](pm, selfID, EntityTypeController, "EnemyTargetReleaseInput")
-					if err != nil {
-						log.Fatalln(err)
-					}
+				input := FieldValue[ControllerInput](pm, selfID, EntityTypeController, "EnemyTargetReleaseInput")
 
-					if input.ID != uuid.Nil && input.ID != targetReleaseData.inputID {
-						return forceTargetReleaseData{
-							inputID: input.ID,
+				if input.ID != uuid.Nil && input.ID != targetReleaseData.inputID {
+					return forceTargetReleaseData{
+						inputID: input.ID,
+					}
+				}
+
+				return nil
+			},
+		},
+		EnemyEventTargetRelease.Effect: {
+			nextState: "IDLE",
+			outputProducerFunc: func(selfID uuid.UUID, pm ProjectorManager) interface{} {
+				target := FieldValue[targetData](pm, selfID, EntityTypeEnemy, "Target")
+
+				if target.id != uuid.Nil {
+					return nil
+				}
+
+				return targetData{}
+			},
+		},
+		EnemyEventMove.Effect: gate{
+			nextState: "TARGET_ACQUIRED",
+			outputProducerFunc: func(selfID uuid.UUID, pm ProjectorManager) interface{} {
+				target := FieldValue[targetData](pm, selfID, EntityTypeEnemy, "Target")
+
+				if target.id == uuid.Nil {
+					log.Println("no target to move")
+					return nil
+				}
+
+				playerPositions, playerIDs := FieldValues[model.Position](pm, "PLAYER", "Position")
+
+				position := FieldValue[model.Position](pm, selfID, EntityTypeEnemy, "Position")
+
+				for index, playerID := range playerIDs {
+					if playerID == target.id {
+						playerPosition := playerPositions[index]
+						if playerPosition.X == position.X {
+							return nil
+						}
+
+						if playerPosition.X > position.X {
+							return model.Position{X: position.X + 1}
+						} else if playerPosition.X < position.X {
+							return model.Position{X: position.X - 1}
 						}
 					}
+				}
 
-					return nil
-				},
-			},
-			{
-				nextState:           "IDLE",
-				unlockByEventEffect: EnemyEventTargetRelease.Effect,
-				eventProducerFunc: func(selfID uuid.UUID, pm ProjectorManager, _ interface{}) interface{} {
-					target, err := FieldValue[targetData](pm, selfID, EntityTypeEnemy, "Target")
-					if err != nil {
-						log.Fatalln(err)
-					}
-
-					if target.id != uuid.Nil {
-						return nil
-					}
-
-					return targetData{}
-				},
-			},
-			{
-				nextState:           "TARGET_ACQUIRED",
-				unlockByEventEffect: EnemyEventMove.Effect,
-				eventProducerFunc: func(selfID uuid.UUID, pm ProjectorManager, _ interface{}) interface{} {
-					target, err := FieldValue[targetData](pm, selfID, EntityTypeEnemy, "Target")
-					if err != nil {
-						log.Fatalln(err)
-					}
-
-					if target.id == uuid.Nil {
-						log.Println("no target to move")
-						return nil
-					}
-
-					playerPositions, playerIDs, err := FieldValues[model.Position](pm, "PLAYER", "Position")
-					if err != nil {
-						log.Fatalln(err)
-					}
-
-					position, err := FieldValue[model.Position](pm, selfID, EntityTypeEnemy, "Position")
-					if err != nil {
-						log.Fatalln(err)
-					}
-
-					for index, playerID := range playerIDs {
-						if playerID == target.id {
-							playerPosition := playerPositions[index]
-							if playerPosition.X == position.X {
-								return nil
-							}
-
-							if playerPosition.X > position.X {
-								return model.Position{X: position.X + 1}
-							} else if playerPosition.X < position.X {
-								return model.Position{X: position.X - 1}
-							}
-						}
-					}
-
-					log.Println("no match target to move")
-					return nil
-				},
+				log.Println("no match target to move")
+				return nil
 			},
 		},
 	},
 }
 
-var EnemyPatrolStateMachine = StateMachine{
+var EnemyPatrolStateMachine = stateMachine{
 	entityType: "ENEMY",
 	nodes:      EnemyPatrolStates,
 }
@@ -190,24 +156,21 @@ type ControllerInput struct {
 	Value interface{}
 }
 
-var ControllerStates = []Node{
-	{
-		State: "ACTIVE",
-		Gates: []Gate{
-			{
-				nextState:           "ACTIVE",
-				unlockByEventEffect: ControllerEventEnemyTargetRelease.Effect,
-				eventProducerFunc: func(selfID uuid.UUID, pm ProjectorManager, _ interface{}) interface{} {
-					return ControllerInput{
-						ID: uuid.New(),
-					}
-				},
+var ControllerStates = map[State]map[Effect]gate{
+	"ACTIVE": {
+		ControllerEventEnemyTargetRelease.Effect: {
+			nextState: "ACTIVE",
+			outputProducerFunc: func(selfID uuid.UUID, pm ProjectorManager) interface{} {
+				return ControllerInput{
+					ID: uuid.New(),
+				}
 			},
 		},
 	},
 }
 
-var ControllerStateMachine = StateMachine{
-	entityType: "CONTROLLER",
-	nodes:      ControllerStates,
+var controllerStateMachine = stateMachine{
+	entityType:   "CONTROLLER",
+	defaultState: "ACTIVE",
+	nodes:        ControllerStates,
 }

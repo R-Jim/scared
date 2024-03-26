@@ -1,7 +1,6 @@
 package state
 
 import (
-	"log"
 	"math"
 	"thief/internal/model"
 
@@ -46,6 +45,15 @@ func initEvent(effect Effect, entityID uuid.UUID, data interface{}) Event {
 		Data:     data,
 	}
 }
+func initEventWithSystemData(effect Effect, entityID uuid.UUID, data interface{}, systemData interface{}) Event {
+	return Event{
+		ID:         uuid.New(),
+		Effect:     effect,
+		EntityID:   entityID,
+		Data:       data,
+		SystemData: systemData,
+	}
+}
 
 type targetData struct {
 	targetType string
@@ -60,7 +68,7 @@ var EnemyPatrolStates = map[State]map[Effect]gate{
 	"IDLE": {
 		EnemyEventTargetAcquired.Effect: {
 			nextState: "TARGET_ACQUIRED",
-			outputProducerFunc: func(selfID uuid.UUID, pm ProjectorManager) interface{} {
+			outputProducerFunc: func(pm ProjectorManager, selfID uuid.UUID) interface{} {
 				playerPositions, playerIDs := FieldValues[model.Position](pm, "PLAYER", "Position")
 
 				enemyPosition := FieldValue[model.Position](pm, selfID, EntityTypeEnemy, "Position")
@@ -84,7 +92,7 @@ var EnemyPatrolStates = map[State]map[Effect]gate{
 	"TARGET_ACQUIRED": {
 		EnemyEventForceTargetRelease.Effect: {
 			nextState: "IDLE",
-			outputProducerFunc: func(selfID uuid.UUID, pm ProjectorManager) interface{} {
+			outputProducerFunc: func(pm ProjectorManager, selfID uuid.UUID) interface{} {
 				targetReleaseData := FieldValue[forceTargetReleaseData](pm, selfID, EntityTypeEnemy, "TargetReleaseLastInput")
 
 				input := FieldValue[ControllerInput](pm, selfID, EntityTypeController, "EnemyTargetReleaseInput")
@@ -98,25 +106,12 @@ var EnemyPatrolStates = map[State]map[Effect]gate{
 				return nil
 			},
 		},
-		EnemyEventTargetRelease.Effect: {
-			nextState: "IDLE",
-			outputProducerFunc: func(selfID uuid.UUID, pm ProjectorManager) interface{} {
-				target := FieldValue[targetData](pm, selfID, EntityTypeEnemy, "Target")
-
-				if target.id != uuid.Nil {
-					return nil
-				}
-
-				return targetData{}
-			},
-		},
 		EnemyEventMove.Effect: gate{
 			nextState: "TARGET_ACQUIRED",
-			outputProducerFunc: func(selfID uuid.UUID, pm ProjectorManager) interface{} {
+			outputProducerFunc: func(pm ProjectorManager, selfID uuid.UUID) interface{} {
 				target := FieldValue[targetData](pm, selfID, EntityTypeEnemy, "Target")
 
 				if target.id == uuid.Nil {
-					log.Println("no target to move")
 					return nil
 				}
 
@@ -139,7 +134,6 @@ var EnemyPatrolStates = map[State]map[Effect]gate{
 					}
 				}
 
-				log.Println("no match target to move")
 				return nil
 			},
 		},
@@ -160,7 +154,7 @@ var ControllerStates = map[State]map[Effect]gate{
 	"ACTIVE": {
 		ControllerEventEnemyTargetRelease.Effect: {
 			nextState: "ACTIVE",
-			outputProducerFunc: func(selfID uuid.UUID, pm ProjectorManager) interface{} {
+			outputProducerFunc: func(pm ProjectorManager, selfID uuid.UUID) interface{} {
 				return ControllerInput{
 					ID: uuid.New(),
 				}

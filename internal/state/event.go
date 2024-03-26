@@ -14,8 +14,9 @@ type Event struct {
 	ID       uuid.UUID
 	EntityID uuid.UUID
 
-	Effect Effect
-	Data   interface{}
+	Effect     Effect
+	Data       interface{}
+	SystemData interface{}
 
 	FromState string
 	ToState   string

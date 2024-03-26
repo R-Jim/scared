@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type outputProducerFunc func(selfID uuid.UUID, pm ProjectorManager) interface{}
+type outputProducerFunc func(pm ProjectorManager, selfID uuid.UUID) interface{}
 
 type gate struct {
 	nextState          State              // Result state after gate unlocked

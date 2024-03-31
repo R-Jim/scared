@@ -26,12 +26,14 @@ func (c LifeCycleComposer) Operate() {
 	resultEvents := []Event{}
 
 	for id, events := range c.store.GetEvents() {
-		state := c.stateMachine.getState(events)
+		currentState := c.stateMachine.getState(events)
 
-		for effect, gate := range c.stateMachine.nodes[state] {
+		for effect, gate := range c.stateMachine.nodes[currentState] {
 			if data := gate.outputUnlockFunc(c.projectorManager, id); data != nil {
 				resultEvents = append(resultEvents, initEvent(effect, id, data))
-				break
+				if gate.outputState != currentState {
+					break
+				}
 			}
 		}
 	}

@@ -8,11 +8,19 @@ import (
 )
 
 const (
+	XEnergyPerMoveInput    = 2
+	YEnergyPerMoveInput    = 10
+	XEnergyConsumePerCycle = 1
+	YEnergyConsumePerCycle = 1
+)
+
+const (
 	EntityTypeThief string = "THIEF"
 )
 
 const (
-	effectThiefMove base.Effect = "THIEF_MOVE_EFFECT"
+	effectThiefAddEnergy base.Effect = "THIEF_ADD_ENERGY_EFFECT"
+	effectThiefMove      base.Effect = "THIEF_MOVE_EFFECT"
 )
 
 const (
@@ -22,16 +30,22 @@ const (
 const (
 	FieldThiefPosition  = "Position"
 	fieldThiefMoveInput = "MoveInput"
+	FieldThiefEnergy    = "Energy"
 )
 
 type thiefMoveOutput struct {
-	inputID  uuid.UUID
-	position model.Position
+	inputID uuid.UUID
+	energy  thiefEnergy
+}
+
+type thiefEnergy struct {
+	X int
+	Y int
 }
 
 var thiefStates = map[base.State]map[base.Effect]base.Gate{
 	stateThiefActive: {
-		effectThiefMove: base.NewGate(stateThiefActive, func(pm base.ProjectorManager, selfID uuid.UUID) interface{} {
+		effectThiefAddEnergy: base.NewGate(stateThiefActive, func(pm base.ProjectorManager, selfID uuid.UUID) interface{} {
 			lastMoveInput := pm.GetEntityProjector(EntityTypeThief).Project(selfID, fieldThiefMoveInput).(uuid.UUID)
 
 			input := pm.GetEntityProjector(EntityTypeController).Project(selfID, fieldControllerThiefInput).(ControllerMoveInput)
@@ -40,22 +54,47 @@ var thiefStates = map[base.State]map[base.Effect]base.Gate{
 				return nil
 			}
 
+			energy := pm.GetEntityProjector(EntityTypeThief).Project(selfID, FieldThiefEnergy).(thiefEnergy)
 			position := pm.GetEntityProjector(EntityTypeThief).Project(selfID, FieldThiefPosition).(model.Position)
-			var newPosition model.Position
 
-			switch input.Value {
-			case MoveInputJump:
-				// TODO: logic here
-			case MoveInputLeft:
-				newPosition.X = position.X - 1
-			case MoveInputRight:
-				newPosition.X = position.X + 1
+			for _, input := range input.Inputs {
+				switch input {
+				case MoveInputJump:
+					if energy.Y <= 0 && position.Y == 0 {
+						energy.Y = YEnergyPerMoveInput
+					}
+				case MoveInputLeft:
+					energy.X = -XEnergyPerMoveInput
+				case MoveInputRight:
+					energy.X = XEnergyPerMoveInput
+				}
 			}
 
 			return thiefMoveOutput{
-				inputID:  input.ID,
-				position: newPosition,
+				inputID: input.ID,
+				energy:  energy,
 			}
+		}),
+		effectThiefMove: base.NewGate(stateThiefActive, func(pm base.ProjectorManager, selfID uuid.UUID) interface{} {
+			energy := pm.GetEntityProjector(EntityTypeThief).Project(selfID, FieldThiefEnergy).(thiefEnergy)
+			position := pm.GetEntityProjector(EntityTypeThief).Project(selfID, FieldThiefPosition).(model.Position)
+			if energy.X == 0 && energy.Y == 0 && position.Y == 0 {
+				return nil
+			}
+
+			if energy.X > 0 {
+				position.X++
+			} else if energy.X < 0 {
+				position.X--
+			}
+
+			if energy.Y > 0 {
+				position.Y++
+			} else if energy.Y == 0 && position.Y > 0 {
+				position.Y--
+			}
+
+			return position
 		}),
 	},
 }

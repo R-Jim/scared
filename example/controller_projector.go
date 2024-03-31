@@ -30,7 +30,7 @@ func (p ControllerProjector) Project(identifier uuid.UUID, field string) interfa
 			switch event.Effect {
 			case EffectControllerMove:
 				moveInputData := base.ParseData[ControllerMoveInput](event)
-				moveInputData.Value = base.ParseSystemData[moveInput](event)
+				moveInputData.Inputs = base.ParseSystemData[[]MoveInput](event)
 				return moveInputData
 			default:
 				return ControllerMoveInput{}

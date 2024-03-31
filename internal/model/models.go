@@ -4,6 +4,7 @@ import "github.com/google/uuid"
 
 type Position struct {
 	X int
+	Y int
 }
 
 type Player struct {

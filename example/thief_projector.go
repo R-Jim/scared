@@ -24,27 +24,48 @@ func (p ThiefProjector) Project(identifier uuid.UUID, field string) interface{} 
 		log.Fatalln(err)
 	}
 
+	var defaultValue interface{}
 	for i := len(events) - 1; i >= 0; i-- {
 		event := events[i]
 		switch field {
 		case FieldThiefPosition:
+			defaultValue = model.Position{}
 			switch event.Effect {
 			case effectThiefMove:
-				return base.ParseData[thiefMoveOutput](event).position
-			default:
-				return model.Position{}
+				return base.ParseData[model.Position](event)
 			}
 		case fieldThiefMoveInput:
+			defaultValue = uuid.Nil
 			switch event.Effect {
-			case effectThiefMove:
+			case effectThiefAddEnergy:
 				return base.ParseData[thiefMoveOutput](event).inputID
-			default:
-				return uuid.Nil
 			}
 		}
 	}
 
-	return nil
+	switch field {
+	case FieldThiefEnergy:
+		var energy thiefEnergy
+		for _, event := range events {
+			switch event.Effect {
+			case effectThiefAddEnergy:
+				energy = base.ParseData[thiefMoveOutput](event).energy
+			case effectThiefMove:
+				if energy.X > 0 {
+					energy.X--
+				} else if energy.X < 0 {
+					energy.X++
+				}
+
+				if energy.Y > 0 {
+					energy.Y--
+				}
+			}
+		}
+		return energy
+	}
+
+	return defaultValue
 }
 
 func (p ThiefProjector) ListIdentifiers() []uuid.UUID {

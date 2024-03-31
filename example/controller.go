@@ -22,17 +22,17 @@ const (
 	fieldControllerThiefInput = "ThiefInput"
 )
 
-type moveInput string
+type MoveInput string
 
 const (
-	MoveInputLeft  moveInput = "LEFT"
-	MoveInputRight moveInput = "RIGHT"
-	MoveInputJump  moveInput = "JUMP"
+	MoveInputLeft  MoveInput = "LEFT"
+	MoveInputRight MoveInput = "RIGHT"
+	MoveInputJump  MoveInput = "JUMP"
 )
 
 type ControllerMoveInput struct {
-	ID    uuid.UUID
-	Value moveInput
+	ID     uuid.UUID
+	Inputs []MoveInput
 }
 
 var controllerStates = map[base.State]map[base.Effect]base.Gate{

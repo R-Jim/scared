@@ -25,14 +25,30 @@ type Game struct {
 }
 
 func (g *Game) Update() error {
+	var controllerMoveInput []example.MoveInput
+	var horizontalControllerMoveInput example.MoveInput
+
 	if ebiten.IsKeyPressed(ebiten.KeyLeft) {
-		for _, composer := range g.systemInputComposers {
-			composer.TransitionByInput(g.thiefID, example.EffectControllerMove, example.MoveInputLeft)
-		}
+		horizontalControllerMoveInput = example.MoveInputLeft
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyRight) {
+		if horizontalControllerMoveInput != "" {
+			horizontalControllerMoveInput = ""
+		}
+		horizontalControllerMoveInput = example.MoveInputRight
+	}
+
+	if horizontalControllerMoveInput != "" {
+		controllerMoveInput = append(controllerMoveInput, horizontalControllerMoveInput)
+	}
+
+	if ebiten.IsKeyPressed(ebiten.KeyUp) {
+		controllerMoveInput = append(controllerMoveInput, example.MoveInputJump)
+	}
+
+	if len(controllerMoveInput) > 0 {
 		for _, composer := range g.systemInputComposers {
-			composer.TransitionByInput(g.thiefID, example.EffectControllerMove, example.MoveInputRight)
+			composer.TransitionByInput(g.thiefID, example.EffectControllerMove, controllerMoveInput)
 		}
 	}
 
@@ -40,7 +56,7 @@ func (g *Game) Update() error {
 		log.Println(g.projectorManager.GetEntityProjector(example.EntityTypeThief).Project(g.thiefID, "Position"))
 	}
 
-	if g.count%6 == 0 {
+	if g.count%2 == 0 {
 		for _, composer := range g.lifeCycleComposers {
 			composer.Operate()
 		}
@@ -53,7 +69,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	thiefProjector := g.projectorManager.GetEntityProjector(example.EntityTypeThief)
 	for _, identifier := range thiefProjector.ListIdentifiers() {
 		position := thiefProjector.Project(identifier, example.FieldThiefPosition).(model.Position)
-		text.Draw(screen, "A", bitmapfont.Face, position.X, 100, color.White)
+		text.Draw(screen, "A", bitmapfont.Face, position.X, 100-position.Y, color.White)
 	}
 }
 

@@ -1,11 +1,11 @@
-package state
+package base
 
 import (
 	"github.com/google/uuid"
 )
 
 type Store struct {
-	counter *int
+	counter *int // used to check if a store has new events
 
 	eventsSet map[uuid.UUID][]Event
 }

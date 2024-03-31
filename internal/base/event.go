@@ -1,4 +1,4 @@
-package state
+package base
 
 import (
 	"log"
@@ -26,6 +26,14 @@ type Event struct {
 
 func ParseData[T interface{}](e Event) T {
 	data, ok := e.Data.(T)
+	if !ok {
+		log.Fatalf("failed to parse data for effect[%s]: %s", e.Effect, reflect.TypeOf(data))
+	}
+	return data
+}
+
+func ParseSystemData[T interface{}](e Event) T {
+	data, ok := e.SystemData.(T)
 	if !ok {
 		log.Fatalf("failed to parse data for effect[%s]: %s", e.Effect, reflect.TypeOf(data))
 	}

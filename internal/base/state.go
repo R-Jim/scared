@@ -1,4 +1,4 @@
-package state
+package base
 
 import (
 	"log"
@@ -8,27 +8,39 @@ import (
 
 type outputProducerFunc func(pm ProjectorManager, selfID uuid.UUID) interface{}
 
-type gate struct {
-	nextState          State              // Result state after gate unlocked
-	outputProducerFunc outputProducerFunc // produces a data to unlock the gate
+// Gate represents a traversable path from the current node
+type Gate struct {
+	outputState      State              // Result state after gate unlocked
+	outputUnlockFunc outputProducerFunc // produces a data to unlock the gate
 }
 
-func NewGate(nextState State, o outputProducerFunc) gate {
-	return gate{
-		nextState:          nextState,
-		outputProducerFunc: o,
+// NewGate returns a new Gate with:
+//   - The expected output State.
+//   - The required unlock func. The func will retrieve/validate necessary data to produce the output data. If output data != nil, the caller of the func(usually a composer) will receive the output data and append the corresponding Event to unlock the Gate and traverse to the next State node
+func NewGate(outputState State, o outputProducerFunc) Gate {
+	return Gate{
+		outputState:      outputState,
+		outputUnlockFunc: o,
 	}
 }
 
+// State represents State node of the State machine
 type State string
 
 type stateMachine struct {
-	entityType   string
-	defaultState State
-	nodes        map[State]map[Effect]gate
+	entityType   string                    // state machine identifier
+	defaultState State                     // default beginning state
+	nodes        map[State]map[Effect]Gate // mapping of traversable nodes
 }
 
-func NewStateMachine(entityType string, defaultState State, nodes map[State]map[Effect]gate) stateMachine {
+// NewStateMachine returns a new state machine. A state machine must have list of "nodes" that traversable from a "defaultState"
+func NewStateMachine(entityType string, defaultState State, nodes map[State]map[Effect]Gate) stateMachine {
+	if len(nodes) <= 0 {
+		log.Fatalf("missing nodes config for state machine[%s]\n", entityType)
+	}
+
+	// TODO: add validation to make sure all nodes is traversable, beginning from the default State
+
 	return stateMachine{
 		entityType:   entityType,
 		defaultState: defaultState,
@@ -82,7 +94,7 @@ func (s stateMachine) getState(events []Event) State {
 
 		gate, isExist := node[event.Effect]
 		if isExist {
-			currentState = gate.nextState
+			currentState = gate.outputState
 		}
 	}
 

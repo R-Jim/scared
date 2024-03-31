@@ -1,4 +1,4 @@
-package state
+package base
 
 import (
 	"log"
@@ -12,6 +12,14 @@ type composer struct {
 	stateMachine     *stateMachine
 }
 
+func NewComposer(store *Store, pm ProjectorManager, sm *stateMachine) composer {
+	return composer{
+		store:            store,
+		projectorManager: pm,
+		stateMachine:     sm,
+	}
+}
+
 type LifeCycleComposer composer
 
 func (c LifeCycleComposer) Operate() {
@@ -21,7 +29,7 @@ func (c LifeCycleComposer) Operate() {
 		state := c.stateMachine.getState(events)
 
 		for effect, gate := range c.stateMachine.nodes[state] {
-			if data := gate.outputProducerFunc(c.projectorManager, id); data != nil {
+			if data := gate.outputUnlockFunc(c.projectorManager, id); data != nil {
 				resultEvents = append(resultEvents, initEvent(effect, id, data))
 				break
 			}
@@ -53,7 +61,7 @@ func (c SystemInputComposer) TransitionByInput(entityID uuid.UUID, effect Effect
 			continue
 		}
 
-		if data := gate.outputProducerFunc(c.projectorManager, entityID); data != nil {
+		if data := gate.outputUnlockFunc(c.projectorManager, entityID); data != nil {
 			if err := c.store.AppendEvent(initEventWithSystemData(unlockByEventEffect, entityID, data, inputData)); err != nil {
 				return false, err
 			}

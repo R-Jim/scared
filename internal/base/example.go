@@ -1,4 +1,4 @@
-package state
+package base
 
 import (
 	"math"
@@ -64,14 +64,19 @@ type forceTargetReleaseData struct {
 	inputID uuid.UUID
 }
 
-var EnemyPatrolStates = map[State]map[Effect]gate{
+var EnemyPatrolStates = map[State]map[Effect]Gate{
 	"IDLE": {
 		EnemyEventTargetAcquired.Effect: {
-			nextState: "TARGET_ACQUIRED",
-			outputProducerFunc: func(pm ProjectorManager, selfID uuid.UUID) interface{} {
-				playerPositions, playerIDs := FieldValues[model.Position](pm, "PLAYER", "Position")
+			outputState: "TARGET_ACQUIRED",
+			outputUnlockFunc: func(pm ProjectorManager, selfID uuid.UUID) interface{} {
+				playerIDs := pm.GetEntityProjector("PLAYER").ListIdentifiers()
+				playerPositions := make([]model.Position, len(playerIDs))
 
-				enemyPosition := FieldValue[model.Position](pm, selfID, EntityTypeEnemy, "Position")
+				for index, playerID := range playerIDs {
+					playerPositions[index] = pm.GetEntityProjector("PLAYER").Project(playerID, "Position").(model.Position)
+				}
+
+				enemyPosition := pm.GetEntityProjector(EntityTypeEnemy).Project(selfID, "Position").(model.Position)
 
 				if len(playerIDs) < 1 {
 					return nil
@@ -91,11 +96,11 @@ var EnemyPatrolStates = map[State]map[Effect]gate{
 	},
 	"TARGET_ACQUIRED": {
 		EnemyEventForceTargetRelease.Effect: {
-			nextState: "IDLE",
-			outputProducerFunc: func(pm ProjectorManager, selfID uuid.UUID) interface{} {
-				targetReleaseData := FieldValue[forceTargetReleaseData](pm, selfID, EntityTypeEnemy, "TargetReleaseLastInput")
+			outputState: "IDLE",
+			outputUnlockFunc: func(pm ProjectorManager, selfID uuid.UUID) interface{} {
+				targetReleaseData := pm.GetEntityProjector(EntityTypeEnemy).Project(selfID, "TargetReleaseLastInput").(forceTargetReleaseData)
 
-				input := FieldValue[ControllerInput](pm, selfID, EntityTypeController, "EnemyTargetReleaseInput")
+				input := pm.GetEntityProjector(EntityTypeController).Project(selfID, "EnemyTargetReleaseInput").(ControllerInput)
 
 				if input.ID != uuid.Nil && input.ID != targetReleaseData.inputID {
 					return forceTargetReleaseData{
@@ -106,18 +111,23 @@ var EnemyPatrolStates = map[State]map[Effect]gate{
 				return nil
 			},
 		},
-		EnemyEventMove.Effect: gate{
-			nextState: "TARGET_ACQUIRED",
-			outputProducerFunc: func(pm ProjectorManager, selfID uuid.UUID) interface{} {
-				target := FieldValue[targetData](pm, selfID, EntityTypeEnemy, "Target")
+		EnemyEventMove.Effect: Gate{
+			outputState: "TARGET_ACQUIRED",
+			outputUnlockFunc: func(pm ProjectorManager, selfID uuid.UUID) interface{} {
+				target := pm.GetEntityProjector(EntityTypeEnemy).Project(selfID, "Target").(targetData)
 
 				if target.id == uuid.Nil {
 					return nil
 				}
 
-				playerPositions, playerIDs := FieldValues[model.Position](pm, "PLAYER", "Position")
+				playerIDs := pm.GetEntityProjector("PLAYER").ListIdentifiers()
+				playerPositions := make([]model.Position, len(playerIDs))
 
-				position := FieldValue[model.Position](pm, selfID, EntityTypeEnemy, "Position")
+				for index, playerID := range playerIDs {
+					playerPositions[index] = pm.GetEntityProjector("PLAYER").Project(playerID, "Position").(model.Position)
+				}
+
+				position := pm.GetEntityProjector(EntityTypeEnemy).Project(selfID, "Position").(model.Position)
 
 				for index, playerID := range playerIDs {
 					if playerID == target.id {
@@ -150,11 +160,11 @@ type ControllerInput struct {
 	Value interface{}
 }
 
-var ControllerStates = map[State]map[Effect]gate{
+var ControllerStates = map[State]map[Effect]Gate{
 	"ACTIVE": {
 		ControllerEventEnemyTargetRelease.Effect: {
-			nextState: "ACTIVE",
-			outputProducerFunc: func(pm ProjectorManager, selfID uuid.UUID) interface{} {
+			outputState: "ACTIVE",
+			outputUnlockFunc: func(pm ProjectorManager, selfID uuid.UUID) interface{} {
 				return ControllerInput{
 					ID: uuid.New(),
 				}

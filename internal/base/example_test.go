@@ -140,7 +140,7 @@ func Test_EnemyStateMachine(t *testing.T) {
 	controllerStore.AppendEvent(initEvent(ControllerEventInit.Effect, enemyID, nil))
 
 	pm := ProjectorManager{
-		entityProjectorMap: map[string]Projector{
+		typeMap: map[string]Projector{
 			"PLAYER":     NewPlayerProjector(),
 			"ENEMY":      NewEnemyProjector(&enemyStore),
 			"CONTROLLER": NewControllerProjector(&controllerStore),
@@ -162,13 +162,13 @@ func Test_EnemyStateMachine(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		enemyComposer.Operate()
 
-		position := pm.GetEntityProjector("ENEMY").Project(enemyID, "Position").(model.Position)
+		position := pm.Get("ENEMY").Project(enemyID, "Position").(model.Position)
 		if position.X != i {
 			t.Fatal("fail move enemy to target")
 		}
 	}
 
-	target := pm.GetEntityProjector("ENEMY").Project(enemyID, "Target").(targetData)
+	target := pm.Get("ENEMY").Project(enemyID, "Target").(targetData)
 	if target.id == uuid.Nil {
 		t.Fatal("no target for release")
 	}
@@ -178,14 +178,14 @@ func Test_EnemyStateMachine(t *testing.T) {
 		t.Fatal("force release target failed")
 	}
 
-	input := pm.GetEntityProjector("CONTROLLER").Project(enemyID, "EnemyTargetReleaseInput").(ControllerInput)
+	input := pm.Get("CONTROLLER").Project(enemyID, "EnemyTargetReleaseInput").(ControllerInput)
 	if input.ID == uuid.Nil {
 		t.Fatal("should have controller input")
 	}
 
 	enemyComposer.Operate()
 
-	target = pm.GetEntityProjector("ENEMY").Project(enemyID, "Target").(targetData)
+	target = pm.Get("ENEMY").Project(enemyID, "Target").(targetData)
 	if target.id != uuid.Nil {
 		t.Fatal("should force release target")
 	}
@@ -193,12 +193,12 @@ func Test_EnemyStateMachine(t *testing.T) {
 	// double check, auto re-assign target
 	enemyComposer.Operate()
 
-	target = pm.GetEntityProjector("ENEMY").Project(enemyID, "Target").(targetData)
+	target = pm.Get("ENEMY").Project(enemyID, "Target").(targetData)
 	if target.id == uuid.Nil {
 		t.Fatal("double check, should auto re-assign target")
 	}
 
-	position := pm.GetEntityProjector("ENEMY").Project(enemyID, "Position").(model.Position)
+	position := pm.Get("ENEMY").Project(enemyID, "Position").(model.Position)
 	if position.X != 3 {
 		t.Fatal("double check, should remain position")
 	}

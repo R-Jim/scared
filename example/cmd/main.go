@@ -53,7 +53,7 @@ func (g *Game) Update() error {
 	}
 
 	if ebiten.IsKeyPressed(ebiten.KeyP) {
-		log.Println(g.projectorManager.GetEntityProjector(example.EntityTypeThief).Project(g.thiefID, "Position"))
+		log.Println(g.projectorManager.Get(example.EntityTypeThief).Project(g.thiefID, "Position"))
 	}
 
 	if g.count%2 == 0 {
@@ -66,7 +66,7 @@ func (g *Game) Update() error {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	thiefProjector := g.projectorManager.GetEntityProjector(example.EntityTypeThief)
+	thiefProjector := g.projectorManager.Get(example.EntityTypeThief)
 	for _, identifier := range thiefProjector.ListIdentifiers() {
 		position := thiefProjector.Project(identifier, example.FieldThiefPosition).(model.Position)
 		text.Draw(screen, "A", bitmapfont.Face, position.X, 100-position.Y, color.White)

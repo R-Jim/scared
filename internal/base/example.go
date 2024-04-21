@@ -69,14 +69,14 @@ var EnemyPatrolStates = map[State]map[Effect]Gate{
 		EnemyEventTargetAcquired.Effect: {
 			outputState: "TARGET_ACQUIRED",
 			outputUnlockFunc: func(pm ProjectorManager, selfID uuid.UUID) interface{} {
-				playerIDs := pm.GetEntityProjector("PLAYER").ListIdentifiers()
+				playerIDs := pm.Get("PLAYER").ListIdentifiers()
 				playerPositions := make([]model.Position, len(playerIDs))
 
 				for index, playerID := range playerIDs {
-					playerPositions[index] = pm.GetEntityProjector("PLAYER").Project(playerID, "Position").(model.Position)
+					playerPositions[index] = pm.Get("PLAYER").Project(playerID, "Position").(model.Position)
 				}
 
-				enemyPosition := pm.GetEntityProjector(EntityTypeEnemy).Project(selfID, "Position").(model.Position)
+				enemyPosition := pm.Get(EntityTypeEnemy).Project(selfID, "Position").(model.Position)
 
 				if len(playerIDs) < 1 {
 					return nil
@@ -98,9 +98,9 @@ var EnemyPatrolStates = map[State]map[Effect]Gate{
 		EnemyEventForceTargetRelease.Effect: {
 			outputState: "IDLE",
 			outputUnlockFunc: func(pm ProjectorManager, selfID uuid.UUID) interface{} {
-				targetReleaseData := pm.GetEntityProjector(EntityTypeEnemy).Project(selfID, "TargetReleaseLastInput").(forceTargetReleaseData)
+				targetReleaseData := pm.Get(EntityTypeEnemy).Project(selfID, "TargetReleaseLastInput").(forceTargetReleaseData)
 
-				input := pm.GetEntityProjector(EntityTypeController).Project(selfID, "EnemyTargetReleaseInput").(ControllerInput)
+				input := pm.Get(EntityTypeController).Project(selfID, "EnemyTargetReleaseInput").(ControllerInput)
 
 				if input.ID != uuid.Nil && input.ID != targetReleaseData.inputID {
 					return forceTargetReleaseData{
@@ -114,20 +114,20 @@ var EnemyPatrolStates = map[State]map[Effect]Gate{
 		EnemyEventMove.Effect: Gate{
 			outputState: "TARGET_ACQUIRED",
 			outputUnlockFunc: func(pm ProjectorManager, selfID uuid.UUID) interface{} {
-				target := pm.GetEntityProjector(EntityTypeEnemy).Project(selfID, "Target").(targetData)
+				target := pm.Get(EntityTypeEnemy).Project(selfID, "Target").(targetData)
 
 				if target.id == uuid.Nil {
 					return nil
 				}
 
-				playerIDs := pm.GetEntityProjector("PLAYER").ListIdentifiers()
+				playerIDs := pm.Get("PLAYER").ListIdentifiers()
 				playerPositions := make([]model.Position, len(playerIDs))
 
 				for index, playerID := range playerIDs {
-					playerPositions[index] = pm.GetEntityProjector("PLAYER").Project(playerID, "Position").(model.Position)
+					playerPositions[index] = pm.Get("PLAYER").Project(playerID, "Position").(model.Position)
 				}
 
-				position := pm.GetEntityProjector(EntityTypeEnemy).Project(selfID, "Position").(model.Position)
+				position := pm.Get(EntityTypeEnemy).Project(selfID, "Position").(model.Position)
 
 				for index, playerID := range playerIDs {
 					if playerID == target.id {

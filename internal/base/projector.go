@@ -58,15 +58,15 @@ func (p storeProjector) ListIdentifiers() []uuid.UUID {
 }
 
 type ProjectorManager struct {
-	entityProjectorMap map[string]Projector
+	typeMap map[string]Projector
 }
 
-func NewProjectorManager(projectorMapping map[string]Projector) ProjectorManager {
+func NewProjectorManager(typeMapping map[string]Projector) ProjectorManager {
 	return ProjectorManager{
-		entityProjectorMap: projectorMapping,
+		typeMap: typeMapping,
 	}
 }
 
-func (m ProjectorManager) GetEntityProjector(entityType string) Projector {
-	return m.entityProjectorMap[entityType]
+func (m ProjectorManager) Get(entityType string) Projector {
+	return m.typeMap[entityType]
 }

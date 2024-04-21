@@ -46,16 +46,17 @@ type thiefEnergy struct {
 var thiefStates = map[base.State]map[base.Effect]base.Gate{
 	stateThiefActive: {
 		effectThiefAddEnergy: base.NewGate(stateThiefActive, func(pm base.ProjectorManager, selfID uuid.UUID) interface{} {
-			lastMoveInput := pm.GetEntityProjector(EntityTypeThief).Project(selfID, fieldThiefMoveInput).(uuid.UUID)
+			thiefProjector := pm.Get(EntityTypeThief)
 
-			input := pm.GetEntityProjector(EntityTypeController).Project(selfID, fieldControllerThiefInput).(ControllerMoveInput)
+			lastMoveInput := thiefProjector.Project(selfID, fieldThiefMoveInput).(uuid.UUID)
+			input := pm.Get(EntityTypeController).Project(selfID, fieldControllerThiefInput).(ControllerMoveInput)
 
 			if input.ID == uuid.Nil || input.ID == lastMoveInput {
 				return nil
 			}
 
-			energy := pm.GetEntityProjector(EntityTypeThief).Project(selfID, FieldThiefEnergy).(thiefEnergy)
-			position := pm.GetEntityProjector(EntityTypeThief).Project(selfID, FieldThiefPosition).(model.Position)
+			energy := thiefProjector.Project(selfID, FieldThiefEnergy).(thiefEnergy)
+			position := thiefProjector.Project(selfID, FieldThiefPosition).(model.Position)
 
 			for _, input := range input.Inputs {
 				switch input {
@@ -76,8 +77,10 @@ var thiefStates = map[base.State]map[base.Effect]base.Gate{
 			}
 		}),
 		effectThiefMove: base.NewGate(stateThiefActive, func(pm base.ProjectorManager, selfID uuid.UUID) interface{} {
-			energy := pm.GetEntityProjector(EntityTypeThief).Project(selfID, FieldThiefEnergy).(thiefEnergy)
-			position := pm.GetEntityProjector(EntityTypeThief).Project(selfID, FieldThiefPosition).(model.Position)
+			thiefProjector := pm.Get(EntityTypeThief)
+
+			energy := thiefProjector.Project(selfID, FieldThiefEnergy).(thiefEnergy)
+			position := thiefProjector.Project(selfID, FieldThiefPosition).(model.Position)
 			if energy.X == 0 && energy.Y == 0 && position.Y == 0 {
 				return nil
 			}

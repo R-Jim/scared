@@ -1,7 +1,7 @@
 package example
 
 import (
-	"thief/internal/base"
+	"thief/internal/engine"
 	"thief/internal/model"
 
 	"github.com/google/uuid"
@@ -19,12 +19,12 @@ const (
 )
 
 const (
-	effectThiefAddEnergy base.Effect = "THIEF_ADD_ENERGY_EFFECT"
-	effectThiefMove      base.Effect = "THIEF_MOVE_EFFECT"
+	effectThiefAddEnergy engine.Effect = "THIEF_ADD_ENERGY_EFFECT"
+	effectThiefMove      engine.Effect = "THIEF_MOVE_EFFECT"
 )
 
 const (
-	stateThiefActive base.State = "THIEF_ACTIVE"
+	stateThiefActive engine.State = "THIEF_ACTIVE"
 )
 
 const (
@@ -43,9 +43,9 @@ type thiefEnergy struct {
 	Y int
 }
 
-var thiefStates = map[base.State]map[base.Effect]base.Gate{
+var thiefStates = map[engine.State]map[engine.Effect]engine.Gate{
 	stateThiefActive: {
-		effectThiefAddEnergy: base.NewGate(stateThiefActive, func(pm base.ProjectorManager, selfID uuid.UUID) interface{} {
+		effectThiefAddEnergy: engine.NewGate(stateThiefActive, func(pm engine.ProjectorManager, selfID uuid.UUID) interface{} {
 			thiefProjector := pm.Get(EntityTypeThief)
 
 			lastMoveInput := thiefProjector.Project(selfID, fieldThiefMoveInput).(uuid.UUID)
@@ -76,7 +76,7 @@ var thiefStates = map[base.State]map[base.Effect]base.Gate{
 				energy:  energy,
 			}
 		}),
-		effectThiefMove: base.NewGate(stateThiefActive, func(pm base.ProjectorManager, selfID uuid.UUID) interface{} {
+		effectThiefMove: engine.NewGate(stateThiefActive, func(pm engine.ProjectorManager, selfID uuid.UUID) interface{} {
 			thiefProjector := pm.Get(EntityTypeThief)
 
 			energy := thiefProjector.Project(selfID, FieldThiefEnergy).(thiefEnergy)
@@ -102,4 +102,4 @@ var thiefStates = map[base.State]map[base.Effect]base.Gate{
 	},
 }
 
-var ThiefStateMachine = base.NewStateMachine(EntityTypeThief, stateThiefActive, thiefStates)
+var ThiefStateMachine = engine.NewStateMachine(EntityTypeThief, stateThiefActive, thiefStates)

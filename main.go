@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"image/color"
 	"log"
-	"thief/internal/constant"
 	"thief/internal/model"
 
 	"github.com/google/uuid"
@@ -49,11 +48,11 @@ type Game struct {
 }
 
 func (g *Game) Update() error {
-	if ebiten.IsKeyPressed(ebiten.KeyArrowLeft) {
-		g.PlayerPosition.X -= constant.PLAYER_MOVE_DISTANCE
-	} else if ebiten.IsKeyPressed(ebiten.KeyArrowRight) {
-		g.PlayerPosition.X += constant.PLAYER_MOVE_DISTANCE
-	}
+	// if ebiten.IsKeyPressed(ebiten.KeyArrowLeft) {
+	// 	g.PlayerPosition.X -= constant.PLAYER_MOVE_DISTANCE
+	// } else if ebiten.IsKeyPressed(ebiten.KeyArrowRight) {
+	// 	g.PlayerPosition.X += constant.PLAYER_MOVE_DISTANCE
+	// }
 
 	if ebiten.IsKeyPressed(ebiten.KeySpace) {
 		// var nearestEnemyID uuid.UUID

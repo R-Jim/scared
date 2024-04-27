@@ -2,7 +2,7 @@ package example
 
 import (
 	"log"
-	"thief/internal/base"
+	base "thief/internal/engine"
 
 	"github.com/google/uuid"
 )

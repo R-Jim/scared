@@ -4,7 +4,7 @@ import (
 	"image/color"
 	"log"
 	"thief/example"
-	"thief/internal/base"
+	base "thief/internal/engine"
 	"thief/internal/model"
 
 	"github.com/google/uuid"

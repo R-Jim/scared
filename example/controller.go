@@ -1,7 +1,7 @@
 package example
 
 import (
-	"thief/internal/base"
+	"thief/internal/engine"
 
 	"github.com/google/uuid"
 )
@@ -11,11 +11,11 @@ const (
 )
 
 const (
-	EffectControllerMove base.Effect = "CONTROLLER_MOVE_EFFECT"
+	EffectControllerMove engine.Effect = "CONTROLLER_MOVE_EFFECT"
 )
 
 const (
-	stateControllerActive base.State = "CONTROLLER_ACTIVE"
+	stateControllerActive engine.State = "CONTROLLER_ACTIVE"
 )
 
 const (
@@ -35,9 +35,9 @@ type ControllerMoveInput struct {
 	Inputs []MoveInput
 }
 
-var controllerStates = map[base.State]map[base.Effect]base.Gate{
+var controllerStates = map[engine.State]map[engine.Effect]engine.Gate{
 	stateControllerActive: {
-		EffectControllerMove: base.NewGate(stateControllerActive, func(pm base.ProjectorManager, selfID uuid.UUID) interface{} {
+		EffectControllerMove: engine.NewGate(stateControllerActive, func(pm engine.ProjectorManager, selfID uuid.UUID) interface{} {
 			return ControllerMoveInput{
 				ID: uuid.New(),
 			}
@@ -45,4 +45,4 @@ var controllerStates = map[base.State]map[base.Effect]base.Gate{
 	},
 }
 
-var ControllerStateMachine = base.NewStateMachine(EntityTypeController, stateControllerActive, controllerStates)
+var ControllerStateMachine = engine.NewStateMachine(EntityTypeController, stateControllerActive, controllerStates)

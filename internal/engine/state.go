@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type outputProducerFunc func(pm ProjectorManager, selfID uuid.UUID) interface{}
+type outputProducerFunc func(pm ProjectorManager, selfID uuid.UUID) (interface{}, bool)
 
 // Gate represents a traversable path from the current node
 type Gate struct {
@@ -27,24 +27,31 @@ func NewGate(outputState State, o outputProducerFunc) Gate {
 // State represents State node of the State machine
 type State string
 
+type Nodes map[State]map[Effect]Gate
+
 type stateMachine struct {
-	entityType   string                    // state machine identifier
-	defaultState State                     // default beginning state
-	nodes        map[State]map[Effect]Gate // mapping of traversable nodes
+	entityType EntityType // state machine identifier
+	nodes      Nodes      // mapping of traversable nodes
 }
 
 // NewStateMachine returns a new state machine. A state machine must have list of "nodes" that traversable from a "defaultState"
-func NewStateMachine(entityType string, defaultState State, nodes map[State]map[Effect]Gate) stateMachine {
+func NewStateMachine(entityType EntityType, defaultState State, nodes Nodes) stateMachine {
 	if len(nodes) <= 0 {
 		log.Fatalf("missing nodes config for state machine[%s]\n", entityType)
+	}
+
+	// Init state
+	nodes[""] = map[Effect]Gate{
+		EffectInit: {
+			outputState: defaultState, // to init a new state machine to the default state
+		},
 	}
 
 	// TODO: add validation to make sure all nodes is traversable, beginning from the default State
 
 	return stateMachine{
-		entityType:   entityType,
-		defaultState: defaultState,
-		nodes:        nodes,
+		entityType: entityType,
+		nodes:      nodes,
 	}
 
 	// For render only
@@ -80,12 +87,12 @@ func NewStateMachine(entityType string, defaultState State, nodes map[State]map[
 }
 
 // Returns current state of the instance
-func (s stateMachine) getState(events []Event) State {
+func (s stateMachine) GetState(events []Event) State {
 	if len(s.nodes) <= 0 {
 		log.Fatalf("no node config for state machine[%s]", s.entityType)
 	}
 
-	currentState := s.defaultState
+	currentState := State("")
 	for _, event := range events {
 		node, isExist := s.nodes[currentState]
 		if !isExist {

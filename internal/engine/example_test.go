@@ -22,7 +22,7 @@ func NewPlayerProjector() Projector {
 	}
 }
 
-func (p PlayerProjector) Project(identifier uuid.UUID, field string) interface{} {
+func (p PlayerProjector) Project(identifier uuid.UUID, field Field) interface{} {
 	if field == "Position" {
 		return p.playerPosition
 	}
@@ -43,7 +43,7 @@ func NewEnemyProjector(enemyStore *Store) Projector {
 	}
 }
 
-func (p EnemyProjector) Project(identifier uuid.UUID, field string) interface{} {
+func (p EnemyProjector) Project(identifier uuid.UUID, field Field) interface{} {
 	events, err := p.enemyStore.GetEventsByEntityID(identifier)
 	if err != nil {
 		log.Fatalln(err)
@@ -98,7 +98,7 @@ func NewControllerProjector(controllerStore *Store) Projector {
 	}
 }
 
-func (p ControllerProjector) Project(identifier uuid.UUID, field string) interface{} {
+func (p ControllerProjector) Project(identifier uuid.UUID, field Field) interface{} {
 	events, err := p.controllerStore.GetEventsByEntityID(identifier)
 	if err != nil {
 		log.Fatalln(err)
@@ -133,14 +133,14 @@ func Test_EnemyStateMachine(t *testing.T) {
 	enemyStore := NewStore()
 	controllerStore := NewStore()
 
-	enemyStateMachine := NewStateMachine(EnemyPatrolStateMachine.entityType, "IDLE", EnemyPatrolStateMachine.nodes)
+	enemyStateMachine := enemyPatrolStateMachine
 	enemyID := uuid.New()
 
 	enemyStore.AppendEvent(initEvent(EnemyEventInit.Effect, enemyID, nil))
 	controllerStore.AppendEvent(initEvent(ControllerEventInit.Effect, enemyID, nil))
 
 	pm := ProjectorManager{
-		typeMap: map[string]Projector{
+		mapping: map[EntityType]Projector{
 			"PLAYER":     NewPlayerProjector(),
 			"ENEMY":      NewEnemyProjector(&enemyStore),
 			"CONTROLLER": NewControllerProjector(&controllerStore),

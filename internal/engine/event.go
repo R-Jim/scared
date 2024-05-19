@@ -10,6 +10,10 @@ import (
 
 type Effect string
 
+const (
+	EffectInit Effect = "INIT"
+)
+
 type Event struct {
 	ID       uuid.UUID
 	EntityID uuid.UUID

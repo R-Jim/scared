@@ -7,46 +7,78 @@ import (
 )
 
 type Projector interface {
-	Project(identifier uuid.UUID, field string) interface{}
+	Project(identifier uuid.UUID, field Field) interface{}
 	ListIdentifiers() []uuid.UUID
 }
 
-type storeProjector struct {
-	store        *Store
-	fieldMapping map[string]map[Effect]func(eventData interface{}) interface{}
+type fieldEffectMapping[model any] struct {
+	field         Field
+	effects       []Effect
+	aggregateFunc func(a, b model) model
+	getFunc       func(m model) interface{}
 }
 
-func NewStoreProjector(store *Store, fieldMapping map[string]func() interface{}) Projector {
-	return storeProjector{
-		store: store,
+func NewFieldEffectMapping[model any](field Field, effects []Effect, aggregateFunc func(a, b model) model, getFunc func(m model) interface{}) fieldEffectMapping[model] {
+	return fieldEffectMapping[model]{
+		field:         field,
+		effects:       effects,
+		aggregateFunc: aggregateFunc,
+		getFunc:       getFunc,
 	}
 }
 
-func (p storeProjector) Project(identifier uuid.UUID, field string) interface{} {
+type storeProjector[model any] struct {
+	store         *Store
+	fieldMappings []fieldEffectMapping[model]
+}
+
+func NewStoreProjector[model any](store *Store, fieldMappings ...fieldEffectMapping[model]) Projector {
+	return storeProjector[model]{
+		store:         store,
+		fieldMappings: fieldMappings,
+	}
+}
+
+func (p storeProjector[model]) Project(identifier uuid.UUID, field Field) interface{} {
 	events, err := p.store.GetEventsByEntityID(identifier)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	for i := len(events) - 1; i >= 0; i-- {
-		supportedEffects, ok := p.fieldMapping[field]
-		if !ok {
-			continue
-		}
+	var mapping *fieldEffectMapping[model]
 
+	for _, fm := range p.fieldMappings {
+		if fm.field == field {
+			mapping = &fm
+			break
+		}
+	}
+	if mapping == nil {
+		return nil
+	}
+
+	var result model
+
+	for i := 0; i < len(events); i++ {
+		var eventData model
 		event := events[i]
 
-		mappingFunc, ok := supportedEffects[event.Effect]
-		if !ok {
-			continue
-		}
+		for _, effect := range mapping.effects {
+			if effect == event.Effect {
+				if event.Data != nil {
+					eventData = event.Data.(model)
+				}
 
-		return mappingFunc(event.Data)
+				result = mapping.aggregateFunc(result, eventData)
+				break
+			}
+		}
 	}
-	return nil
+
+	return mapping.getFunc(result)
 }
 
-func (p storeProjector) ListIdentifiers() []uuid.UUID {
+func (p storeProjector[model]) ListIdentifiers() []uuid.UUID {
 	eventsMap := p.store.GetEvents()
 
 	identifiers := []uuid.UUID{}
@@ -57,16 +89,18 @@ func (p storeProjector) ListIdentifiers() []uuid.UUID {
 	return identifiers
 }
 
+type ProjectorTypeMapping map[EntityType]Projector
+
 type ProjectorManager struct {
-	typeMap map[string]Projector
+	mapping ProjectorTypeMapping
 }
 
-func NewProjectorManager(typeMapping map[string]Projector) ProjectorManager {
+func NewProjectorManager(mapping ProjectorTypeMapping) ProjectorManager {
 	return ProjectorManager{
-		typeMap: typeMapping,
+		mapping: mapping,
 	}
 }
 
-func (m ProjectorManager) Get(entityType string) Projector {
-	return m.typeMap[entityType]
+func (m ProjectorManager) Get(entityType EntityType) Projector {
+	return m.mapping[entityType]
 }

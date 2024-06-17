@@ -8,17 +8,17 @@ import (
 
 type outputProducerFunc func(pm ProjectorManager, selfID uuid.UUID) (interface{}, bool)
 
-// Gate represents a traversable path from the current node
-type Gate struct {
+// gate represents a traversable path from the current node
+type gate struct {
 	outputState      State              // Result state after gate unlocked
 	outputUnlockFunc outputProducerFunc // produces a data to unlock the gate
 }
 
 // NewGate returns a new Gate with:
 //   - The expected output State.
-//   - The required unlock func. The func will retrieve/validate necessary data to produce the output data. If output data != nil, the caller of the func(usually a composer) will receive the output data and append the corresponding Event to unlock the Gate and traverse to the next State node
-func NewGate(outputState State, o outputProducerFunc) Gate {
-	return Gate{
+//   - The required unlock func. The func will retrieve/validate necessary data to produce the output data. If outputUnlockFunc's isUnlocked == true, the caller of the func(usually a composer) will receive the output data and append the corresponding Event to unlock the Gate and traverse to the output State
+func NewGate(outputState State, o outputProducerFunc) gate {
+	return gate{
 		outputState:      outputState,
 		outputUnlockFunc: o,
 	}
@@ -27,7 +27,7 @@ func NewGate(outputState State, o outputProducerFunc) Gate {
 // State represents State node of the State machine
 type State string
 
-type Nodes map[State]map[Effect]Gate
+type Nodes map[State]map[Effect]gate
 
 type stateMachine struct {
 	entityType EntityType // state machine identifier
@@ -41,7 +41,7 @@ func NewStateMachine(entityType EntityType, defaultState State, nodes Nodes) sta
 	}
 
 	// Init state
-	nodes[""] = map[Effect]Gate{
+	nodes[""] = map[Effect]gate{
 		EffectInit: {
 			outputState: defaultState, // to init a new state machine to the default state
 		},

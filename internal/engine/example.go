@@ -64,7 +64,7 @@ type forceTargetReleaseData struct {
 	inputID uuid.UUID
 }
 
-var enemyPatrolStateMachine = NewStateMachine("ENEMY", "IDLE", map[State]map[Effect]Gate{
+var enemyPatrolStateMachine = NewStateMachine("ENEMY", "IDLE", map[State]map[Effect]gate{
 	"IDLE": {
 		EnemyEventTargetAcquired.Effect: {
 			outputState: "TARGET_ACQUIRED",
@@ -111,7 +111,7 @@ var enemyPatrolStateMachine = NewStateMachine("ENEMY", "IDLE", map[State]map[Eff
 				return nil, false
 			},
 		},
-		EnemyEventMove.Effect: Gate{
+		EnemyEventMove.Effect: gate{
 			outputState: "TARGET_ACQUIRED",
 			outputUnlockFunc: func(pm ProjectorManager, selfID uuid.UUID) (interface{}, bool) {
 				target := pm.Get(EntityTypeEnemy).Project(selfID, "Target").(targetData)
@@ -155,7 +155,7 @@ type ControllerInput struct {
 	Value interface{}
 }
 
-var controllerStateMachine = NewStateMachine("CONTROLLER", "ACTIVE", map[State]map[Effect]Gate{
+var controllerStateMachine = NewStateMachine("CONTROLLER", "ACTIVE", map[State]map[Effect]gate{
 	"ACTIVE": {
 		ControllerEventEnemyTargetRelease.Effect: {
 			outputState: "ACTIVE",

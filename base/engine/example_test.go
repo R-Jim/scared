@@ -3,7 +3,7 @@ package engine
 import (
 	"log"
 	"testing"
-	"thief/internal/model"
+	"thief/base/model"
 
 	"github.com/google/uuid"
 )

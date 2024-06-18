@@ -2,7 +2,7 @@ package engine
 
 import (
 	"math"
-	"thief/internal/model"
+	"thief/base/model"
 
 	"github.com/google/uuid"
 )

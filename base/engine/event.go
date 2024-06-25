@@ -1,8 +1,6 @@
 package engine
 
 import (
-	"log"
-	"reflect"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,28 +16,17 @@ type Event struct {
 	ID       uuid.UUID
 	EntityID uuid.UUID
 
-	Effect     Effect
-	Data       interface{}
-	SystemData interface{}
-
-	FromState string
-	ToState   string
+	Effect Effect
+	Data   interface{}
 
 	CreatedAt time.Time
 }
 
-func ParseData[T interface{}](e Event) T {
-	data, ok := e.Data.(T)
-	if !ok {
-		log.Fatalf("failed to parse data for effect[%s]: %s", e.Effect, reflect.TypeOf(data))
+func initEvent(effect Effect, entityID uuid.UUID, data interface{}) Event {
+	return Event{
+		ID:       uuid.New(),
+		Effect:   effect,
+		EntityID: entityID,
+		Data:     data,
 	}
-	return data
-}
-
-func ParseSystemData[T interface{}](e Event) T {
-	data, ok := e.SystemData.(T)
-	if !ok {
-		log.Fatalf("failed to parse data for effect[%s]: %s", e.Effect, reflect.TypeOf(data))
-	}
-	return data
 }

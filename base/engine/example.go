@@ -1,169 +1,142 @@
 package engine
 
-import (
-	"math"
-	"thief/base/model"
+// TODO: update example
+// var (
+// 	EnemyEventInit = Event{
+// 		Effect: "INIT",
+// 	}
+// 	EnemyEventTargetAcquired = Event{
+// 		Effect: "TARGET_ACQUIRE",
+// 	}
+// 	EnemyEventTargetRelease = Event{
+// 		Effect: "TARGET_RELEASE",
+// 	}
+// 	EnemyEventForceTargetRelease = Event{
+// 		Effect: "FORCE_TARGET_RELEASE",
+// 	}
+// 	EnemyEventMove = Event{
+// 		Effect: "MOVE",
+// 	}
+// )
 
-	"github.com/google/uuid"
-)
+// var (
+// 	ControllerEventInit = Event{
+// 		Effect: "INIT",
+// 	}
+// 	ControllerEventEnemyTargetRelease = Event{
+// 		Effect: "TARGET_RELEASE",
+// 	}
+// )
 
-const EntityTypeEnemy = "ENEMY"
-const EntityTypeController = "CONTROLLER"
+// type targetData struct {
+// 	targetType string
+// 	id         uuid.UUID
+// }
 
-var (
-	EnemyEventInit = Event{
-		Effect: "INIT",
-	}
-	EnemyEventTargetAcquired = Event{
-		Effect: "TARGET_ACQUIRE",
-	}
-	EnemyEventTargetRelease = Event{
-		Effect: "TARGET_RELEASE",
-	}
-	EnemyEventForceTargetRelease = Event{
-		Effect: "FORCE_TARGET_RELEASE",
-	}
-	EnemyEventMove = Event{
-		Effect: "MOVE",
-	}
-)
+// type forceTargetReleaseData struct {
+// 	inputID uuid.UUID
+// }
 
-var (
-	ControllerEventInit = Event{
-		Effect: "INIT",
-	}
-	ControllerEventEnemyTargetRelease = Event{
-		Effect: "TARGET_RELEASE",
-	}
-)
+// var enemyPatrolStateMachine = NewStateMachine("IDLE", map[State]map[Effect]gate{
+// 	"IDLE": {
+// 		EnemyEventTargetAcquired.Effect: {
+// 			outputState: "TARGET_ACQUIRED",
+// 			outputUnlockFunc: func(pm ProjectorManager, selfID uuid.UUID) (interface{}, bool) {
+// 				playerIDs := pm.Get("PLAYER").ListIdentifiers()
+// 				playerPositions := make([]model.Position, len(playerIDs))
 
-func initEvent(effect Effect, entityID uuid.UUID, data interface{}) Event {
-	return Event{
-		ID:       uuid.New(),
-		Effect:   effect,
-		EntityID: entityID,
-		Data:     data,
-	}
-}
-func initEventWithSystemData(effect Effect, entityID uuid.UUID, data interface{}, systemData interface{}) Event {
-	return Event{
-		ID:         uuid.New(),
-		Effect:     effect,
-		EntityID:   entityID,
-		Data:       data,
-		SystemData: systemData,
-	}
-}
+// 				for index, playerID := range playerIDs {
+// 					playerPositions[index] = pm.Get("Position").Project(playerID).(model.Position)
+// 				}
 
-type targetData struct {
-	targetType string
-	id         uuid.UUID
-}
+// 				enemyPosition := pm.Get("Position").Project(selfID).(model.Position)
 
-type forceTargetReleaseData struct {
-	inputID uuid.UUID
-}
+// 				if len(playerIDs) < 1 {
+// 					return nil, false
+// 				}
 
-var enemyPatrolStateMachine = NewStateMachine("ENEMY", "IDLE", map[State]map[Effect]gate{
-	"IDLE": {
-		EnemyEventTargetAcquired.Effect: {
-			outputState: "TARGET_ACQUIRED",
-			outputUnlockFunc: func(pm ProjectorManager, selfID uuid.UUID) (interface{}, bool) {
-				playerIDs := pm.Get("PLAYER").ListIdentifiers()
-				playerPositions := make([]model.Position, len(playerIDs))
+// 				isInRange := math.Sqrt(math.Pow(float64(enemyPosition.X-playerPositions[0].X), 2)) <= 5
+// 				if !isInRange {
+// 					return nil, false
+// 				}
 
-				for index, playerID := range playerIDs {
-					playerPositions[index] = pm.Get("PLAYER").Project(playerID, "Position").(model.Position)
-				}
+// 				return targetData{
+// 					targetType: "PLAYER",
+// 					id:         playerIDs[0],
+// 				}, true
+// 			},
+// 		},
+// 	},
+// 	"TARGET_ACQUIRED": {
+// 		EnemyEventForceTargetRelease.Effect: {
+// 			outputState: "IDLE",
+// 			outputUnlockFunc: func(pm ProjectorManager, selfID uuid.UUID) (interface{}, bool) {
+// 				targetReleaseData := pm.Get("TargetReleaseLastInput").Project(selfID).(forceTargetReleaseData)
 
-				enemyPosition := pm.Get(EntityTypeEnemy).Project(selfID, "Position").(model.Position)
+// 				input := pm.Get("EnemyTargetReleaseInput").Project(selfID).(ControllerInput)
 
-				if len(playerIDs) < 1 {
-					return nil, false
-				}
+// 				if input.ID != uuid.Nil && input.ID != targetReleaseData.inputID {
+// 					return forceTargetReleaseData{
+// 						inputID: input.ID,
+// 					}, true
+// 				}
 
-				isInRange := math.Sqrt(math.Pow(float64(enemyPosition.X-playerPositions[0].X), 2)) <= 5
-				if !isInRange {
-					return nil, false
-				}
+// 				return nil, false
+// 			},
+// 		},
+// 		EnemyEventMove.Effect: gate{
+// 			outputState: "TARGET_ACQUIRED",
+// 			outputUnlockFunc: func(pm ProjectorManager, selfID uuid.UUID) (interface{}, bool) {
+// 				target := pm.Get("Target").Project(selfID).(targetData)
 
-				return targetData{
-					targetType: "PLAYER",
-					id:         playerIDs[0],
-				}, true
-			},
-		},
-	},
-	"TARGET_ACQUIRED": {
-		EnemyEventForceTargetRelease.Effect: {
-			outputState: "IDLE",
-			outputUnlockFunc: func(pm ProjectorManager, selfID uuid.UUID) (interface{}, bool) {
-				targetReleaseData := pm.Get(EntityTypeEnemy).Project(selfID, "TargetReleaseLastInput").(forceTargetReleaseData)
+// 				if target.id == uuid.Nil {
+// 					return nil, false
+// 				}
 
-				input := pm.Get(EntityTypeController).Project(selfID, "EnemyTargetReleaseInput").(ControllerInput)
+// 				playerIDs := pm.Get("PLAYER").ListIdentifiers()
+// 				playerPositions := make([]model.Position, len(playerIDs))
 
-				if input.ID != uuid.Nil && input.ID != targetReleaseData.inputID {
-					return forceTargetReleaseData{
-						inputID: input.ID,
-					}, true
-				}
+// 				for index, playerID := range playerIDs {
+// 					playerPositions[index] = pm.Get("Position").Project(playerID).(model.Position)
+// 				}
 
-				return nil, false
-			},
-		},
-		EnemyEventMove.Effect: gate{
-			outputState: "TARGET_ACQUIRED",
-			outputUnlockFunc: func(pm ProjectorManager, selfID uuid.UUID) (interface{}, bool) {
-				target := pm.Get(EntityTypeEnemy).Project(selfID, "Target").(targetData)
+// 				position := pm.Get("Position").Project(selfID).(model.Position)
 
-				if target.id == uuid.Nil {
-					return nil, false
-				}
+// 				for index, playerID := range playerIDs {
+// 					if playerID == target.id {
+// 						playerPosition := playerPositions[index]
+// 						if playerPosition.X == position.X {
+// 							return nil, false
+// 						}
 
-				playerIDs := pm.Get("PLAYER").ListIdentifiers()
-				playerPositions := make([]model.Position, len(playerIDs))
+// 						if playerPosition.X > position.X {
+// 							return model.Position{X: position.X + 1}, true
+// 						} else if playerPosition.X < position.X {
+// 							return model.Position{X: position.X - 1}, true
+// 						}
+// 					}
+// 				}
 
-				for index, playerID := range playerIDs {
-					playerPositions[index] = pm.Get("PLAYER").Project(playerID, "Position").(model.Position)
-				}
+// 				return nil, false
+// 			},
+// 		},
+// 	},
+// })
 
-				position := pm.Get(EntityTypeEnemy).Project(selfID, "Position").(model.Position)
+// type ControllerInput struct {
+// 	ID    uuid.UUID
+// 	Value interface{}
+// }
 
-				for index, playerID := range playerIDs {
-					if playerID == target.id {
-						playerPosition := playerPositions[index]
-						if playerPosition.X == position.X {
-							return nil, false
-						}
-
-						if playerPosition.X > position.X {
-							return model.Position{X: position.X + 1}, true
-						} else if playerPosition.X < position.X {
-							return model.Position{X: position.X - 1}, true
-						}
-					}
-				}
-
-				return nil, false
-			},
-		},
-	},
-})
-
-type ControllerInput struct {
-	ID    uuid.UUID
-	Value interface{}
-}
-
-var controllerStateMachine = NewStateMachine("CONTROLLER", "ACTIVE", map[State]map[Effect]gate{
-	"ACTIVE": {
-		ControllerEventEnemyTargetRelease.Effect: {
-			outputState: "ACTIVE",
-			outputUnlockFunc: func(pm ProjectorManager, selfID uuid.UUID) (interface{}, bool) {
-				return ControllerInput{
-					ID: uuid.New(),
-				}, true
-			},
-		},
-	},
-})
+// var controllerStateMachine = NewStateMachine("ACTIVE", map[State]map[Effect]gate{
+// 	"ACTIVE": {
+// 		ControllerEventEnemyTargetRelease.Effect: {
+// 			outputState: "ACTIVE",
+// 			outputUnlockFunc: func(pm ProjectorManager, selfID uuid.UUID) (interface{}, bool) {
+// 				return ControllerInput{
+// 					ID: uuid.New(),
+// 				}, true
+// 			},
+// 		},
+// 	},
+// })

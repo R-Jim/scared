@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type outputProducerFunc func(pm ProjectorManager, selfID uuid.UUID) (interface{}, bool)
+type outputProducerFunc func(selfID uuid.UUID) (interface{}, bool)
 
 // gate represents a traversable path from the current node
 type gate struct {
@@ -30,28 +30,29 @@ type State string
 type Nodes map[State]map[Effect]gate
 
 type stateMachine struct {
-	entityType EntityType // state machine identifier
-	nodes      Nodes      // mapping of traversable nodes
+	nodes Nodes // mapping of traversable nodes
 }
 
 // NewStateMachine returns a new state machine. A state machine must have list of "nodes" that traversable from a "defaultState"
-func NewStateMachine(entityType EntityType, defaultState State, nodes Nodes) stateMachine {
+func NewStateMachine(defaultState State, nodes Nodes) stateMachine {
 	if len(nodes) <= 0 {
-		log.Fatalf("missing nodes config for state machine[%s]\n", entityType)
+		log.Fatalf("missing nodes config for state machine\n")
 	}
 
 	// Init state
 	nodes[""] = map[Effect]gate{
 		EffectInit: {
 			outputState: defaultState, // to init a new state machine to the default state
+			outputUnlockFunc: func(selfID uuid.UUID) (interface{}, bool) {
+				return nil, true
+			},
 		},
 	}
 
 	// TODO: add validation to make sure all nodes is traversable, beginning from the default State
 
 	return stateMachine{
-		entityType: entityType,
-		nodes:      nodes,
+		nodes: nodes,
 	}
 
 	// For render only
@@ -89,7 +90,7 @@ func NewStateMachine(entityType EntityType, defaultState State, nodes Nodes) sta
 // Returns current state of the instance
 func (s stateMachine) GetState(events []Event) State {
 	if len(s.nodes) <= 0 {
-		log.Fatalf("no node config for state machine[%s]", s.entityType)
+		log.Fatalf("no node config for state machine")
 	}
 
 	currentState := State("")

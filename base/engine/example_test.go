@@ -1,208 +1,198 @@
 package engine
 
-import (
-	"log"
-	"testing"
-	"thief/base/model"
+// TODO: update outdated example test
+// type PositionProjector struct {
+// 	playerID       uuid.UUID
+// 	playerPosition model.Position
+// }
 
-	"github.com/google/uuid"
-)
+// func NewPlayerProjector() Projector {
+// 	return PositionProjector{
+// 		playerID: uuid.New(),
+// 		playerPosition: model.Position{
+// 			X: 5,
+// 		},
+// 	}
+// }
 
-type PlayerProjector struct {
-	playerID       uuid.UUID
-	playerPosition model.Position
-}
+// func (p PositionProjector) Project(identifier uuid.UUID) interface{} {
+// 	return p.playerPosition
+// }
 
-func NewPlayerProjector() Projector {
-	return PlayerProjector{
-		playerID: uuid.New(),
-		playerPosition: model.Position{
-			X: 5,
-		},
-	}
-}
+// func (p PositionProjector) ListIdentifiers() []uuid.UUID {
+// 	return []uuid.UUID{p.playerID}
+// }
 
-func (p PlayerProjector) Project(identifier uuid.UUID, field Field) interface{} {
-	if field == "Position" {
-		return p.playerPosition
-	}
-	return nil
-}
+// type EnemyProjector struct {
+// 	enemyStore *Store
+// }
 
-func (p PlayerProjector) ListIdentifiers() []uuid.UUID {
-	return []uuid.UUID{p.playerID}
-}
+// func NewEnemyProjector(enemyStore *Store) Projector {
+// 	return EnemyProjector{
+// 		enemyStore: enemyStore,
+// 	}
+// }
 
-type EnemyProjector struct {
-	enemyStore *Store
-}
+// func (p EnemyProjector) Project(identifier uuid.UUID, field Field) interface{} {
+// 	events, err := p.enemyStore.GetEventsByEntityID(identifier)
+// 	if err != nil {
+// 		log.Fatalln(err)
+// 	}
 
-func NewEnemyProjector(enemyStore *Store) Projector {
-	return EnemyProjector{
-		enemyStore: enemyStore,
-	}
-}
+// 	for i := len(events) - 1; i >= 0; i-- {
+// 		event := events[i]
+// 		switch field {
+// 		case "Position":
+// 			switch event.Effect {
+// 			case EnemyEventMove.Effect:
+// 				return ParseData[model.Position](event)
+// 			case EnemyEventInit.Effect:
+// 				return model.Position{}
+// 			}
+// 		case "Target":
+// 			switch event.Effect {
+// 			case EnemyEventTargetRelease.Effect, EnemyEventTargetAcquired.Effect:
+// 				return ParseData[targetData](event)
+// 			case EnemyEventInit.Effect, EnemyEventForceTargetRelease.Effect:
+// 				return targetData{}
+// 			}
+// 		case "TargetReleaseLastInput":
+// 			switch event.Effect {
+// 			case EnemyEventForceTargetRelease.Effect:
+// 				return ParseData[forceTargetReleaseData](event)
+// 			default:
+// 				return forceTargetReleaseData{}
+// 			}
+// 		}
+// 	}
 
-func (p EnemyProjector) Project(identifier uuid.UUID, field Field) interface{} {
-	events, err := p.enemyStore.GetEventsByEntityID(identifier)
-	if err != nil {
-		log.Fatalln(err)
-	}
+// 	return nil
+// }
 
-	for i := len(events) - 1; i >= 0; i-- {
-		event := events[i]
-		switch field {
-		case "Position":
-			switch event.Effect {
-			case EnemyEventMove.Effect:
-				return ParseData[model.Position](event)
-			case EnemyEventInit.Effect:
-				return model.Position{}
-			}
-		case "Target":
-			switch event.Effect {
-			case EnemyEventTargetRelease.Effect, EnemyEventTargetAcquired.Effect:
-				return ParseData[targetData](event)
-			case EnemyEventInit.Effect, EnemyEventForceTargetRelease.Effect:
-				return targetData{}
-			}
-		case "TargetReleaseLastInput":
-			switch event.Effect {
-			case EnemyEventForceTargetRelease.Effect:
-				return ParseData[forceTargetReleaseData](event)
-			default:
-				return forceTargetReleaseData{}
-			}
-		}
-	}
+// func (p EnemyProjector) ListIdentifiers() []uuid.UUID {
+// 	identifiers := []uuid.UUID{}
+// 	for id, _ := range p.enemyStore.GetEvents() {
+// 		identifiers = append(identifiers, id)
+// 	}
 
-	return nil
-}
+// 	return identifiers
+// }
 
-func (p EnemyProjector) ListIdentifiers() []uuid.UUID {
-	identifiers := []uuid.UUID{}
-	for id, _ := range p.enemyStore.GetEvents() {
-		identifiers = append(identifiers, id)
-	}
+// type ControllerProjector struct {
+// 	controllerStore *Store
+// }
 
-	return identifiers
-}
+// func NewControllerProjector(controllerStore *Store) Projector {
+// 	return ControllerProjector{
+// 		controllerStore: controllerStore,
+// 	}
+// }
 
-type ControllerProjector struct {
-	controllerStore *Store
-}
+// func (p ControllerProjector) Project(identifier uuid.UUID, field Field) interface{} {
+// 	events, err := p.controllerStore.GetEventsByEntityID(identifier)
+// 	if err != nil {
+// 		log.Fatalln(err)
+// 	}
 
-func NewControllerProjector(controllerStore *Store) Projector {
-	return ControllerProjector{
-		controllerStore: controllerStore,
-	}
-}
+// 	for i := len(events) - 1; i >= 0; i-- {
+// 		event := events[i]
+// 		switch field {
+// 		case "EnemyTargetReleaseInput":
+// 			switch event.Effect {
+// 			case ControllerEventEnemyTargetRelease.Effect:
+// 				return ParseData[ControllerInput](event)
+// 			case ControllerEventInit.Effect:
+// 				return ControllerInput{}
+// 			}
+// 		}
+// 	}
 
-func (p ControllerProjector) Project(identifier uuid.UUID, field Field) interface{} {
-	events, err := p.controllerStore.GetEventsByEntityID(identifier)
-	if err != nil {
-		log.Fatalln(err)
-	}
+// 	return nil
+// }
 
-	for i := len(events) - 1; i >= 0; i-- {
-		event := events[i]
-		switch field {
-		case "EnemyTargetReleaseInput":
-			switch event.Effect {
-			case ControllerEventEnemyTargetRelease.Effect:
-				return ParseData[ControllerInput](event)
-			case ControllerEventInit.Effect:
-				return ControllerInput{}
-			}
-		}
-	}
+// func (p ControllerProjector) ListIdentifiers() []uuid.UUID {
+// 	identifiers := []uuid.UUID{}
+// 	for id, _ := range p.controllerStore.GetEvents() {
+// 		identifiers = append(identifiers, id)
+// 	}
 
-	return nil
-}
+// 	return identifiers
+// }
 
-func (p ControllerProjector) ListIdentifiers() []uuid.UUID {
-	identifiers := []uuid.UUID{}
-	for id, _ := range p.controllerStore.GetEvents() {
-		identifiers = append(identifiers, id)
-	}
+// func Test_EnemyStateMachine(t *testing.T) {
+// 	enemyStore := NewStore()
+// 	controllerStore := NewStore()
 
-	return identifiers
-}
+// 	enemyStateMachine := enemyPatrolStateMachine
+// 	enemyID := uuid.New()
 
-func Test_EnemyStateMachine(t *testing.T) {
-	enemyStore := NewStore()
-	controllerStore := NewStore()
+// 	enemyStore.AppendEvent(initEvent(EnemyEventInit.Effect, enemyID, nil))
+// 	controllerStore.AppendEvent(initEvent(ControllerEventInit.Effect, enemyID, nil))
 
-	enemyStateMachine := enemyPatrolStateMachine
-	enemyID := uuid.New()
+// 	pm := ProjectorManager{
+// 		mapping: map[EntityType]Projector{
+// 			"PLAYER":     NewPlayerProjector(),
+// 			"ENEMY":      NewEnemyProjector(&enemyStore),
+// 			"CONTROLLER": NewControllerProjector(&controllerStore),
+// 		},
+// 	}
 
-	enemyStore.AppendEvent(initEvent(EnemyEventInit.Effect, enemyID, nil))
-	controllerStore.AppendEvent(initEvent(ControllerEventInit.Effect, enemyID, nil))
+// 	enemyComposer := LifeCycleComposer{
+// 		store:            &enemyStore,
+// 		projectorManager: pm,
+// 		stateMachine:     &enemyStateMachine,
+// 	}
 
-	pm := ProjectorManager{
-		mapping: map[EntityType]Projector{
-			"PLAYER":     NewPlayerProjector(),
-			"ENEMY":      NewEnemyProjector(&enemyStore),
-			"CONTROLLER": NewControllerProjector(&controllerStore),
-		},
-	}
+// 	controllerComposer := SystemInputComposer{
+// 		store:            &controllerStore,
+// 		projectorManager: pm,
+// 		stateMachine:     &controllerStateMachine,
+// 	}
 
-	enemyComposer := LifeCycleComposer{
-		store:            &enemyStore,
-		projectorManager: pm,
-		stateMachine:     &enemyStateMachine,
-	}
+// 	for i := 0; i < 4; i++ {
+// 		enemyComposer.Operate()
 
-	controllerComposer := SystemInputComposer{
-		store:            &controllerStore,
-		projectorManager: pm,
-		stateMachine:     &controllerStateMachine,
-	}
+// 		position := pm.Get("ENEMY").Project(enemyID, "Position").(model.Position)
+// 		if position.X != i {
+// 			t.Fatal("fail move enemy to target")
+// 		}
+// 	}
 
-	for i := 0; i < 4; i++ {
-		enemyComposer.Operate()
+// 	target := pm.Get("ENEMY").Project(enemyID, "Target").(targetData)
+// 	if target.id == uuid.Nil {
+// 		t.Fatal("no target for release")
+// 	}
 
-		position := pm.Get("ENEMY").Project(enemyID, "Position").(model.Position)
-		if position.X != i {
-			t.Fatal("fail move enemy to target")
-		}
-	}
+// 	result, err := controllerComposer.TransitionByInput(enemyID, ControllerEventEnemyTargetRelease.Effect, nil)
+// 	if err != nil || !result {
+// 		t.Fatal("force release target failed")
+// 	}
 
-	target := pm.Get("ENEMY").Project(enemyID, "Target").(targetData)
-	if target.id == uuid.Nil {
-		t.Fatal("no target for release")
-	}
+// 	input := pm.Get("CONTROLLER").Project(enemyID, "EnemyTargetReleaseInput").(ControllerInput)
+// 	if input.ID == uuid.Nil {
+// 		t.Fatal("should have controller input")
+// 	}
 
-	result, err := controllerComposer.TransitionByInput(enemyID, ControllerEventEnemyTargetRelease.Effect, nil)
-	if err != nil || !result {
-		t.Fatal("force release target failed")
-	}
+// 	enemyComposer.Operate()
 
-	input := pm.Get("CONTROLLER").Project(enemyID, "EnemyTargetReleaseInput").(ControllerInput)
-	if input.ID == uuid.Nil {
-		t.Fatal("should have controller input")
-	}
+// 	target = pm.Get("ENEMY").Project(enemyID, "Target").(targetData)
+// 	if target.id != uuid.Nil {
+// 		t.Fatal("should force release target")
+// 	}
 
-	enemyComposer.Operate()
+// 	// double check, auto re-assign target
+// 	enemyComposer.Operate()
 
-	target = pm.Get("ENEMY").Project(enemyID, "Target").(targetData)
-	if target.id != uuid.Nil {
-		t.Fatal("should force release target")
-	}
+// 	target = pm.Get("ENEMY").Project(enemyID, "Target").(targetData)
+// 	if target.id == uuid.Nil {
+// 		t.Fatal("double check, should auto re-assign target")
+// 	}
 
-	// double check, auto re-assign target
-	enemyComposer.Operate()
-
-	target = pm.Get("ENEMY").Project(enemyID, "Target").(targetData)
-	if target.id == uuid.Nil {
-		t.Fatal("double check, should auto re-assign target")
-	}
-
-	position := pm.Get("ENEMY").Project(enemyID, "Position").(model.Position)
-	if position.X != 3 {
-		t.Fatal("double check, should remain position")
-	}
-}
+// 	position := pm.Get("ENEMY").Project(enemyID, "Position").(model.Position)
+// 	if position.X != 3 {
+// 		t.Fatal("double check, should remain position")
+// 	}
+// }
 
 // type affectedTargetCondition struct {
 // 	entityTypes []string

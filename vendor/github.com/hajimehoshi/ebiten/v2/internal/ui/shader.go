@@ -19,13 +19,13 @@ import (
 	"math"
 	"reflect"
 
+	"github.com/hajimehoshi/ebiten/v2/internal/atlas"
 	"github.com/hajimehoshi/ebiten/v2/internal/graphics"
-	"github.com/hajimehoshi/ebiten/v2/internal/mipmap"
 	"github.com/hajimehoshi/ebiten/v2/internal/shaderir"
 )
 
 type Shader struct {
-	shader *mipmap.Shader
+	shader *atlas.Shader
 
 	uniformNames       []string
 	uniformTypes       []shaderir.Type
@@ -34,15 +34,14 @@ type Shader struct {
 
 func NewShader(ir *shaderir.Program) *Shader {
 	return &Shader{
-		shader:       mipmap.NewShader(ir),
+		shader:       atlas.NewShader(ir),
 		uniformNames: ir.UniformNames[graphics.PreservedUniformVariablesCount:],
 		uniformTypes: ir.Uniforms[graphics.PreservedUniformVariablesCount:],
 	}
 }
 
-func (s *Shader) MarkDisposed() {
-	s.shader.MarkDisposed()
-	s.shader = nil
+func (s *Shader) Deallocate() {
+	s.shader.Deallocate()
 }
 
 func (s *Shader) AppendUniforms(dst []uint32, uniforms map[string]any) []uint32 {

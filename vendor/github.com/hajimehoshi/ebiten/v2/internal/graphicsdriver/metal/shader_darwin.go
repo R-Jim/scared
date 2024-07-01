@@ -63,23 +63,18 @@ func (s *Shader) Dispose() {
 }
 
 func (s *Shader) init(device mtl.Device) error {
-	const (
-		v = "Vertex"
-		f = "Fragment"
-	)
-
-	src := msl.Compile(s.ir, v, f)
+	src := msl.Compile(s.ir)
 	lib, err := device.MakeLibrary(src, mtl.CompileOptions{})
 	if err != nil {
-		return fmt.Errorf("metal: device.MakeLibrary failed: %v, source: %s", err, src)
+		return fmt.Errorf("metal: device.MakeLibrary failed: %w, source: %s", err, src)
 	}
-	vs, err := lib.MakeFunction(v)
+	vs, err := lib.MakeFunction(msl.VertexName)
 	if err != nil {
-		return fmt.Errorf("metal: lib.MakeFunction for vertex failed: %v, source: %s", err, src)
+		return fmt.Errorf("metal: lib.MakeFunction for vertex failed: %w, source: %s", err, src)
 	}
-	fs, err := lib.MakeFunction(f)
+	fs, err := lib.MakeFunction(msl.FragmentName)
 	if err != nil {
-		return fmt.Errorf("metal: lib.MakeFunction for fragment failed: %v, source: %s", err, src)
+		return fmt.Errorf("metal: lib.MakeFunction for fragment failed: %w, source: %s", err, src)
 	}
 	s.fs = fs
 	s.vs = vs
@@ -119,10 +114,10 @@ func (s *Shader) RenderPipelineState(view *view, blend graphicsdriver.Blend, ste
 	rpld.ColorAttachments[0].AlphaBlendOperation = blendOperationToMetalBlendOperation(blend.BlendOperationAlpha)
 	rpld.ColorAttachments[0].RGBBlendOperation = blendOperationToMetalBlendOperation(blend.BlendOperationRGB)
 
-	if stencilMode == prepareStencil {
-		rpld.ColorAttachments[0].WriteMask = mtl.ColorWriteMaskNone
-	} else {
+	if stencilMode == noStencil || stencilMode == drawWithStencil {
 		rpld.ColorAttachments[0].WriteMask = mtl.ColorWriteMaskAll
+	} else {
+		rpld.ColorAttachments[0].WriteMask = mtl.ColorWriteMaskNone
 	}
 
 	rps, err := view.getMTLDevice().MakeRenderPipelineState(rpld)

@@ -72,7 +72,6 @@ type defaultContext struct {
 	gpIsFramebuffer            uintptr
 	gpIsProgram                uintptr
 	gpIsRenderbuffer           uintptr
-	gpIsTexture                uintptr
 	gpLinkProgram              uintptr
 	gpPixelStorei              uintptr
 	gpReadPixels               uintptr
@@ -80,7 +79,7 @@ type defaultContext struct {
 	gpScissor                  uintptr
 	gpShaderSource             uintptr
 	gpStencilFunc              uintptr
-	gpStencilOp                uintptr
+	gpStencilOpSeparate        uintptr
 	gpTexImage2D               uintptr
 	gpTexParameteri            uintptr
 	gpTexSubImage2D            uintptr
@@ -349,11 +348,6 @@ func (c *defaultContext) IsRenderbuffer(renderbuffer uint32) bool {
 	return byte(ret) != 0
 }
 
-func (c *defaultContext) IsTexture(texture uint32) bool {
-	ret, _, _ := purego.SyscallN(c.gpIsTexture, uintptr(texture))
-	return byte(ret) != 0
-}
-
 func (c *defaultContext) LinkProgram(program uint32) {
 	purego.SyscallN(c.gpLinkProgram, uintptr(program))
 }
@@ -384,8 +378,8 @@ func (c *defaultContext) StencilFunc(xfunc uint32, ref int32, mask uint32) {
 	purego.SyscallN(c.gpStencilFunc, uintptr(xfunc), uintptr(ref), uintptr(mask))
 }
 
-func (c *defaultContext) StencilOp(fail uint32, zfail uint32, zpass uint32) {
-	purego.SyscallN(c.gpStencilOp, uintptr(fail), uintptr(zfail), uintptr(zpass))
+func (c *defaultContext) StencilOpSeparate(face uint32, fail uint32, zfail uint32, zpass uint32) {
+	purego.SyscallN(c.gpStencilOpSeparate, uintptr(face), uintptr(fail), uintptr(zfail), uintptr(zpass))
 }
 
 func (c *defaultContext) TexImage2D(target uint32, level int32, internalformat int32, width int32, height int32, format uint32, xtype uint32, pixels []byte) {
@@ -528,7 +522,6 @@ func (c *defaultContext) LoadFunctions() error {
 	c.gpIsFramebuffer = g.get("glIsFramebuffer")
 	c.gpIsProgram = g.get("glIsProgram")
 	c.gpIsRenderbuffer = g.get("glIsRenderbuffer")
-	c.gpIsTexture = g.get("glIsTexture")
 	c.gpLinkProgram = g.get("glLinkProgram")
 	c.gpPixelStorei = g.get("glPixelStorei")
 	c.gpReadPixels = g.get("glReadPixels")
@@ -536,7 +529,7 @@ func (c *defaultContext) LoadFunctions() error {
 	c.gpScissor = g.get("glScissor")
 	c.gpShaderSource = g.get("glShaderSource")
 	c.gpStencilFunc = g.get("glStencilFunc")
-	c.gpStencilOp = g.get("glStencilOp")
+	c.gpStencilOpSeparate = g.get("glStencilOpSeparate")
 	c.gpTexImage2D = g.get("glTexImage2D")
 	c.gpTexParameteri = g.get("glTexParameteri")
 	c.gpTexSubImage2D = g.get("glTexSubImage2D")

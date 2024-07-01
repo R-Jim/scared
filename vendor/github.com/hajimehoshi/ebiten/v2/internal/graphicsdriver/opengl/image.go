@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build !playstation5
+
 package opengl
 
 import (
@@ -43,10 +45,6 @@ type framebuffer struct {
 
 func (i *Image) ID() graphicsdriver.ImageID {
 	return i.id
-}
-
-func (i *Image) IsInvalidated() bool {
-	return !i.graphics.context.ctx.IsTexture(uint32(i.texture))
 }
 
 func (i *Image) Dispose() {

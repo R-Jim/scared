@@ -54,11 +54,6 @@ func InputChars() []rune {
 // Note that a Key represents a physical key of US keyboard layout.
 // For example, KeyQ represents Q key on US keyboards and ' (quote) key on Dvorak keyboards.
 //
-// Known issue: On Edge browser, some keys don't work well:
-//
-//   - KeyKPEnter and KeyKPEqual are recognized as KeyEnter and KeyEqual.
-//   - KeyPrintScreen is only treated at keyup event.
-//
 // IsKeyPressed is concurrent-safe.
 //
 // On Android (ebitenmobile), EbitenView must be focusable to enable to handle keyboard keys.
@@ -76,7 +71,7 @@ func IsKeyPressed(key Key) bool {
 //
 // KeyName is concurrent-safe.
 func KeyName(key Key) string {
-	return ui.KeyName(ui.Key(key))
+	return ui.Get().KeyName(ui.Key(key))
 }
 
 // CursorPosition returns a position of a mouse cursor relative to the game screen (window). The cursor position is
@@ -180,18 +175,18 @@ func GamepadAxisNum(id GamepadID) int {
 // GamepadAxisValue returns a float value [-1.0 - 1.0] of the given gamepad (id)'s axis (axis).
 //
 // GamepadAxisValue is concurrent-safe.
-func GamepadAxisValue(id GamepadID, axis int) float64 {
+func GamepadAxisValue(id GamepadID, axis GamepadAxisType) float64 {
 	g := gamepad.Get(id)
 	if g == nil {
 		return 0
 	}
-	return g.Axis(axis)
+	return g.Axis(int(axis))
 }
 
 // GamepadAxis returns a float value [-1.0 - 1.0] of the given gamepad (id)'s axis (axis).
 //
 // Deprecated: as of v2.2. Use GamepadAxisValue instead.
-func GamepadAxis(id GamepadID, axis int) float64 {
+func GamepadAxis(id GamepadID, axis GamepadAxisType) float64 {
 	return GamepadAxisValue(id, axis)
 }
 

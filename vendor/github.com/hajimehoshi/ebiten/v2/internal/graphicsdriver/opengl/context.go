@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build !playstation5
+
 package opengl
 
 import (
@@ -67,6 +69,10 @@ func convertBlendOperation(o graphicsdriver.BlendOperation) blendOperation {
 		return gl.FUNC_SUBTRACT
 	case graphicsdriver.BlendOperationReverseSubtract:
 		return gl.FUNC_REVERSE_SUBTRACT
+	case graphicsdriver.BlendOperationMin:
+		return gl.MIN
+	case graphicsdriver.BlendOperationMax:
+		return gl.MAX
 	default:
 		panic(fmt.Sprintf("opengl: invalid blend operation %d", o))
 	}
@@ -269,9 +275,6 @@ func (c *context) framebufferPixelsToBuffer(f *framebuffer, buffer buffer, width
 }
 
 func (c *context) deleteTexture(t textureNative) {
-	if !c.ctx.IsTexture(uint32(t)) {
-		return
-	}
 	if c.lastTexture == t {
 		c.lastTexture = 0
 	}

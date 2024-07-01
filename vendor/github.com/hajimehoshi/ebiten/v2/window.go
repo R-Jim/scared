@@ -165,7 +165,7 @@ var (
 
 func initializeWindowPositionIfNeeded(width, height int) {
 	if atomic.LoadUint32(&windowPositionSetExplicitly) == 0 {
-		sw, sh := ui.Get().ScreenSizeInFullscreen()
+		sw, sh := ui.Get().Monitor().Size()
 		x, y := ui.InitialWindowPosition(sw, sh, width, height)
 		ui.Get().Window().SetPosition(x, y)
 	}
@@ -175,7 +175,7 @@ func initializeWindowPositionIfNeeded(width, height int) {
 // WindowSize returns (0, 0) on other environments.
 //
 // Even if the application is in fullscreen mode, WindowSize returns the original window size
-// If you need the fullscreen dimensions, see ScreenSizeInFullscreen instead.
+// If you need the fullscreen dimensions, see Monitor().Size() instead.
 //
 // WindowSize is concurrent-safe.
 func WindowSize() (int, int) {
@@ -322,7 +322,7 @@ func IsWindowClosingHandled() bool {
 
 // SetWindowMousePassthrough sets whether a mouse cursor passthroughs the window or not on desktops. The default state is false.
 //
-// Even if this is set true, some platforms might requrie a window to be undecorated
+// Even if this is set true, some platforms might require a window to be undecorated
 // in order to make the mouse cursor passthrough the window.
 //
 // SetWindowMousePassthrough works only on desktops.
@@ -335,7 +335,7 @@ func SetWindowMousePassthrough(enabled bool) {
 
 // IsWindowMousePassthrough reports whether a mouse cursor passthroughs the window or not on desktops.
 //
-// IsWindowMousePassthrough alaywas returns false if the platform is not a desktop.
+// IsWindowMousePassthrough always returns false if the platform is not a desktop.
 //
 // IsWindowMousePassthrough is concurrent-safe.
 func IsWindowMousePassthrough() bool {

@@ -34,6 +34,7 @@ const (
 type GraphicsLibrary int
 
 const (
+	// GraphicsLibraryAuto represents the automatic choose of graphics library by Ebitengine.
 	GraphicsLibraryAuto GraphicsLibrary = GraphicsLibrary(ui.GraphicsLibraryAuto)
 
 	// GraphicsLibraryUnknown represents the state at which graphics library cannot be determined,
@@ -48,6 +49,9 @@ const (
 
 	// GraphicsLibraryMetal represents the graphics library Apple's Metal.
 	GraphicsLibraryMetal GraphicsLibrary = GraphicsLibrary(ui.GraphicsLibraryMetal)
+
+	// GraphicsLibraryMetal represents the graphics library PlayStation 5.
+	GraphicsLibraryPlayStation5 GraphicsLibrary = GraphicsLibrary(ui.GraphicsLibraryPlayStation5)
 )
 
 // String returns a string representing the graphics library.
@@ -66,5 +70,5 @@ type DebugInfo struct {
 
 // ReadDebugInfo writes debug info (e.g. current graphics library) into a provided struct.
 func ReadDebugInfo(d *DebugInfo) {
-	d.GraphicsLibrary = GraphicsLibrary(ui.GetGraphicsLibrary())
+	d.GraphicsLibrary = GraphicsLibrary(ui.Get().GraphicsLibrary())
 }

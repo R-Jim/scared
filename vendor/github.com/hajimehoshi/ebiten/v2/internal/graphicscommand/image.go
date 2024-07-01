@@ -43,33 +43,15 @@ type Image struct {
 	// have its graphicsdriver.Image.
 	id int
 
-	bufferedWritePixelsArgs []graphicsdriver.PixelsArgs
+	bufferedWritePixelsArgs []writePixelsCommandArgs
 }
 
-var nextID = 1
+var nextImageID = 1
 
-func genNextID() int {
-	id := nextID
-	nextID++
+func genNextImageID() int {
+	id := nextImageID
+	nextImageID++
 	return id
-}
-
-// imagesWithBuffers is the set of an image with buffers.
-var imagesWithBuffers []*Image
-
-// addImageWithBuffer adds an image to the list of images with unflushed buffers.
-func addImageWithBuffer(img *Image) {
-	imagesWithBuffers = append(imagesWithBuffers, img)
-}
-
-// flushImageBuffers flushes all the image buffers and send to the command queue.
-// flushImageBuffers should be called before flushing commands.
-func flushImageBuffers() {
-	for i, img := range imagesWithBuffers {
-		img.flushBufferedWritePixels()
-		imagesWithBuffers[i] = nil
-	}
-	imagesWithBuffers = imagesWithBuffers[:0]
 }
 
 // NewImage returns a new image.
@@ -80,7 +62,7 @@ func NewImage(width, height int, screenFramebuffer bool) *Image {
 		width:  width,
 		height: height,
 		screen: screenFramebuffer,
-		id:     genNextID(),
+		id:     genNextImageID(),
 	}
 	c := &newImageCommand{
 		result: i,
@@ -88,7 +70,7 @@ func NewImage(width, height int, screenFramebuffer bool) *Image {
 		height: height,
 		screen: screenFramebuffer,
 	}
-	currentCommandQueue().Enqueue(c)
+	theCommandQueueManager.enqueueCommand(c)
 	return i
 }
 
@@ -96,11 +78,12 @@ func (i *Image) flushBufferedWritePixels() {
 	if len(i.bufferedWritePixelsArgs) == 0 {
 		return
 	}
+
 	c := &writePixelsCommand{
 		dst:  i,
 		args: i.bufferedWritePixelsArgs,
 	}
-	currentCommandQueue().Enqueue(c)
+	theCommandQueueManager.enqueueCommand(c)
 
 	i.bufferedWritePixelsArgs = nil
 }
@@ -110,7 +93,7 @@ func (i *Image) Dispose() {
 	c := &disposeImageCommand{
 		target: i,
 	}
-	currentCommandQueue().Enqueue(c)
+	theCommandQueueManager.enqueueCommand(c)
 }
 
 func (i *Image) InternalSize() (int, int) {
@@ -147,7 +130,7 @@ func (i *Image) InternalSize() (int, int) {
 //
 // If the source image is not specified, i.e., src is nil and there is no image in the uniform variables, the
 // elements for the source image are not used.
-func (i *Image) DrawTriangles(srcs [graphics.ShaderImageCount]*Image, vertices []float32, indices []uint16, blend graphicsdriver.Blend, dstRegion graphicsdriver.Region, srcRegions [graphics.ShaderImageCount]graphicsdriver.Region, shader *Shader, uniforms []uint32, evenOdd bool) {
+func (i *Image) DrawTriangles(srcs [graphics.ShaderImageCount]*Image, vertices []float32, indices []uint32, blend graphicsdriver.Blend, dstRegion image.Rectangle, srcRegions [graphics.ShaderImageCount]image.Rectangle, shader *Shader, uniforms []uint32, fillRule graphicsdriver.FillRule) {
 	for _, src := range srcs {
 		if src == nil {
 			continue
@@ -159,7 +142,7 @@ func (i *Image) DrawTriangles(srcs [graphics.ShaderImageCount]*Image, vertices [
 	}
 	i.flushBufferedWritePixels()
 
-	currentCommandQueue().EnqueueDrawTrianglesCommand(i, srcs, vertices, indices, blend, dstRegion, srcRegions, shader, uniforms, evenOdd)
+	theCommandQueueManager.enqueueDrawTrianglesCommand(i, srcs, vertices, indices, blend, dstRegion, srcRegions, shader, uniforms, fillRule)
 }
 
 // ReadPixels reads the image's pixels.
@@ -170,41 +153,18 @@ func (i *Image) ReadPixels(graphicsDriver graphicsdriver.Graphics, args []graphi
 		img:  i,
 		args: args,
 	}
-	currentCommandQueue().Enqueue(c)
-	if err := currentCommandQueue().Flush(graphicsDriver, false, nil); err != nil {
+	theCommandQueueManager.enqueueCommand(c)
+	if err := theCommandQueueManager.flush(graphicsDriver, false); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (i *Image) WritePixels(pixels []byte, region image.Rectangle) {
-	i.bufferedWritePixelsArgs = append(i.bufferedWritePixelsArgs, graphicsdriver.PixelsArgs{
-		Pixels: pixels,
-		Region: region,
+func (i *Image) WritePixels(pixels *graphics.ManagedBytes, region image.Rectangle) {
+	i.bufferedWritePixelsArgs = append(i.bufferedWritePixelsArgs, writePixelsCommandArgs{
+		pixels: pixels,
+		region: region,
 	})
-	addImageWithBuffer(i)
-}
-
-func (i *Image) IsInvalidated(graphicsDriver graphicsdriver.Graphics) (bool, error) {
-	if i.screen {
-		// The screen image might not have a texture, and in this case it is impossible to detect whether
-		// the image is invalidated or not.
-		return false, fmt.Errorf("graphicscommand: IsInvalidated cannot be called on the screen image")
-	}
-
-	// i.image can be nil before initializing.
-	if i.image == nil {
-		return false, nil
-	}
-
-	c := &isInvalidatedCommand{
-		image: i,
-	}
-	currentCommandQueue().Enqueue(c)
-	if err := currentCommandQueue().Flush(graphicsDriver, false, nil); err != nil {
-		return false, err
-	}
-	return c.result, nil
 }
 
 func (i *Image) dumpName(path string) string {

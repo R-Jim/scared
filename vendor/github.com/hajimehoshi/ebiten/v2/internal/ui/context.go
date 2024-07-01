@@ -16,21 +16,18 @@ package ui
 
 import (
 	"math"
-	"sync"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2/internal/atlas"
-	"github.com/hajimehoshi/ebiten/v2/internal/buffered"
 	"github.com/hajimehoshi/ebiten/v2/internal/clock"
 	"github.com/hajimehoshi/ebiten/v2/internal/debug"
 	"github.com/hajimehoshi/ebiten/v2/internal/graphicsdriver"
-	"github.com/hajimehoshi/ebiten/v2/internal/hooks"
-	"github.com/hajimehoshi/ebiten/v2/internal/mipmap"
+	"github.com/hajimehoshi/ebiten/v2/internal/hook"
 )
 
 var (
-	NearestFilterShader = &Shader{shader: mipmap.NearestFilterShader}
-	LinearFilterShader  = &Shader{shader: mipmap.LinearFilterShader}
+	NearestFilterShader = &Shader{shader: atlas.NearestFilterShader}
+	LinearFilterShader  = &Shader{shader: atlas.LinearFilterShader}
 )
 
 type Game interface {
@@ -61,43 +58,37 @@ type context struct {
 
 	skipCount int
 
-	setContextOnce sync.Once
+	funcsInFrameCh chan func()
 }
 
 func newContext(game Game) *context {
 	return &context{
-		game: game,
+		game:           game,
+		funcsInFrameCh: make(chan func()),
 	}
 }
 
-func (c *context) updateFrame(graphicsDriver graphicsdriver.Graphics, outsideWidth, outsideHeight float64, deviceScaleFactor float64, ui *userInterfaceImpl, swapBuffersForGL func()) error {
+func (c *context) updateFrame(graphicsDriver graphicsdriver.Graphics, outsideWidth, outsideHeight float64, deviceScaleFactor float64, ui *UserInterface) error {
 	// TODO: If updateCount is 0 and vsync is disabled, swapping buffers can be skipped.
-	return c.updateFrameImpl(graphicsDriver, clock.UpdateFrame(), outsideWidth, outsideHeight, deviceScaleFactor, ui, false, swapBuffersForGL)
+	return c.updateFrameImpl(graphicsDriver, clock.UpdateFrame(), outsideWidth, outsideHeight, deviceScaleFactor, ui, false)
 }
 
-func (c *context) forceUpdateFrame(graphicsDriver graphicsdriver.Graphics, outsideWidth, outsideHeight float64, deviceScaleFactor float64, ui *userInterfaceImpl, swapBuffersForGL func()) error {
+func (c *context) forceUpdateFrame(graphicsDriver graphicsdriver.Graphics, outsideWidth, outsideHeight float64, deviceScaleFactor float64, ui *UserInterface) error {
 	n := 1
-	if graphicsDriver.IsDirectX() {
+	if ui.GraphicsLibrary() == GraphicsLibraryDirectX {
 		// On DirectX, both framebuffers in the swap chain should be updated.
 		// Or, the rendering result becomes unexpected when the window is resized.
 		n = 2
 	}
 	for i := 0; i < n; i++ {
-		if err := c.updateFrameImpl(graphicsDriver, 1, outsideWidth, outsideHeight, deviceScaleFactor, ui, true, swapBuffersForGL); err != nil {
+		if err := c.updateFrameImpl(graphicsDriver, 1, outsideWidth, outsideHeight, deviceScaleFactor, ui, true); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (c *context) updateFrameImpl(graphicsDriver graphicsdriver.Graphics, updateCount int, outsideWidth, outsideHeight float64, deviceScaleFactor float64, ui *userInterfaceImpl, forceDraw bool, swapBuffersForGL func()) (err error) {
-	if err := theGlobalState.error(); err != nil {
-		return err
-	}
-
-	ui.beginFrame()
-	defer ui.endFrame()
-
+func (c *context) updateFrameImpl(graphicsDriver graphicsdriver.Graphics, updateCount int, outsideWidth, outsideHeight float64, deviceScaleFactor float64, ui *UserInterface, forceDraw bool) (err error) {
 	// The given outside size can be 0 e.g. just after restoring from the fullscreen mode on Windows (#1589)
 	// Just ignore such cases. Otherwise, creating a zero-sized framebuffer causes a panic.
 	if outsideWidth == 0 || outsideHeight == 0 {
@@ -106,14 +97,26 @@ func (c *context) updateFrameImpl(graphicsDriver graphicsdriver.Graphics, update
 
 	debug.Logf("----\n")
 
-	if err := buffered.BeginFrame(graphicsDriver); err != nil {
+	if err := atlas.BeginFrame(graphicsDriver); err != nil {
 		return err
 	}
+
 	defer func() {
-		if err1 := buffered.EndFrame(graphicsDriver, swapBuffersForGL); err == nil && err1 != nil {
+		if err1 := atlas.EndFrame(); err1 != nil && err == nil {
 			err = err1
+			return
+		}
+
+		if err1 := atlas.SwapBuffers(graphicsDriver); err1 != nil && err == nil {
+			err = err1
+			return
 		}
 	}()
+
+	// Flush deferred functions, like reading pixels from GPU.
+	if err := c.processFuncsInFrame(ui); err != nil {
+		return err
+	}
 
 	// ForceUpdate can be invoked even if the context is not initialized yet (#1591).
 	if w, h := c.layoutGame(outsideWidth, outsideHeight, deviceScaleFactor); w == 0 || h == 0 {
@@ -139,7 +142,7 @@ func (c *context) updateFrameImpl(graphicsDriver graphicsdriver.Graphics, update
 			ui.readInputState(inputState)
 		})
 
-		if err := hooks.RunBeforeUpdateHooks(); err != nil {
+		if err := hook.RunBeforeUpdateHooks(); err != nil {
 			return err
 		}
 		if err := c.game.Update(); err != nil {
@@ -147,7 +150,7 @@ func (c *context) updateFrameImpl(graphicsDriver graphicsdriver.Graphics, update
 		}
 
 		// Catch the error that happened at (*Image).At.
-		if err := theGlobalState.error(); err != nil {
+		if err := ui.error(); err != nil {
 			return err
 		}
 	}
@@ -159,7 +162,7 @@ func (c *context) updateFrameImpl(graphicsDriver graphicsdriver.Graphics, update
 	}
 
 	// Draw the game.
-	if err := c.drawGame(graphicsDriver, forceDraw); err != nil {
+	if err := c.drawGame(graphicsDriver, ui, forceDraw); err != nil {
 		return err
 	}
 
@@ -174,10 +177,10 @@ func (c *context) newOffscreenImage(w, h int) *Image {
 	return img
 }
 
-func (c *context) drawGame(graphicsDriver graphicsdriver.Graphics, forceDraw bool) error {
-	if (c.offscreen.imageType == atlas.ImageTypeVolatile) != theGlobalState.isScreenClearedEveryFrame() {
+func (c *context) drawGame(graphicsDriver graphicsdriver.Graphics, ui *UserInterface, forceDraw bool) error {
+	if (c.offscreen.imageType == atlas.ImageTypeVolatile) != ui.IsScreenClearedEveryFrame() {
 		w, h := c.offscreen.width, c.offscreen.height
-		c.offscreen.MarkDisposed()
+		c.offscreen.Deallocate()
 		c.offscreen = c.newOffscreenImage(w, h)
 	}
 
@@ -187,7 +190,7 @@ func (c *context) drawGame(graphicsDriver graphicsdriver.Graphics, forceDraw boo
 	// Even though updateCount == 0, the offscreen is cleared and Draw is called.
 	// Draw should not update the game state and then the screen should not be updated without Update, but
 	// users might want to process something at Draw with the time intervals of FPS.
-	if theGlobalState.isScreenClearedEveryFrame() {
+	if ui.IsScreenClearedEveryFrame() {
 		c.offscreen.clear()
 	}
 
@@ -245,21 +248,17 @@ func (c *context) layoutGame(outsideWidth, outsideHeight float64, deviceScaleFac
 	ow := int(math.Ceil(c.offscreenWidth))
 	oh := int(math.Ceil(c.offscreenHeight))
 
-	if c.screen != nil {
-		if c.screen.width != sw || c.screen.height != sh {
-			c.screen.MarkDisposed()
-			c.screen = nil
-		}
+	if c.screen != nil && (c.screen.width != sw || c.screen.height != sh) {
+		c.screen.Deallocate()
+		c.screen = nil
 	}
 	if c.screen == nil {
 		c.screen = c.game.NewScreenImage(sw, sh)
 	}
 
-	if c.offscreen != nil {
-		if c.offscreen.width != ow || c.offscreen.height != oh {
-			c.offscreen.MarkDisposed()
-			c.offscreen = nil
-		}
+	if c.offscreen != nil && (c.offscreen.width != ow || c.offscreen.height != oh) {
+		c.offscreen.Deallocate()
+		c.offscreen = nil
 	}
 	if c.offscreen == nil {
 		c.offscreen = c.newOffscreenImage(ow, oh)
@@ -294,6 +293,39 @@ func (c *context) screenScaleAndOffsets() (scale, offsetX, offsetY float64) {
 	return
 }
 
-func LogicalPositionToClientPosition(x, y float64) (float64, float64) {
-	return theUI.context.logicalPositionToClientPosition(x, y, theUI.DeviceScaleFactor())
+func (u *UserInterface) LogicalPositionToClientPositionInNativePixels(x, y float64) (float64, float64) {
+	s := u.Monitor().DeviceScaleFactor()
+	x, y = u.context.logicalPositionToClientPosition(x, y, s)
+	x = dipToNativePixels(x, s)
+	y = dipToNativePixels(y, s)
+	return x, y
+}
+
+func (c *context) runInFrame(f func()) {
+	ch := make(chan struct{})
+	c.funcsInFrameCh <- func() {
+		defer close(ch)
+		f()
+	}
+	<-ch
+	return
+}
+
+func (c *context) processFuncsInFrame(ui *UserInterface) error {
+	var processed bool
+	for {
+		select {
+		case f := <-c.funcsInFrameCh:
+			f()
+			processed = true
+		default:
+			if processed {
+				// Catch the error that happened at (*Image).At.
+				if err := ui.error(); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}
 }

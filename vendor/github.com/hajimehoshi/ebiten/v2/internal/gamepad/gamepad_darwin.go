@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !ios && !nintendosdk
+//go:build !ios
 
 package gamepad
 
@@ -397,6 +397,10 @@ func (g *nativeGamepadImpl) buttonCount() int {
 
 func (g *nativeGamepadImpl) hatCount() int {
 	return len(g.hatValues)
+}
+
+func (g *nativeGamepadImpl) isAxisReady(axis int) bool {
+	return axis >= 0 && axis < g.axisCount()
 }
 
 func (g *nativeGamepadImpl) axisValue(axis int) float64 {

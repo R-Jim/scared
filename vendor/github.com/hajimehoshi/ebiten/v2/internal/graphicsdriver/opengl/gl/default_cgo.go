@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2014 Eric Woroshow
 // SPDX-FileCopyrightText: 2022 The Ebitengine Authors
 
-//go:build !darwin && !js && !windows
+//go:build !darwin && !js && !windows && !playstation5
 
 package gl
 
@@ -212,10 +212,6 @@ package gl
 //   typedef GLboolean (*fn)(GLuint renderbuffer);
 //   return ((fn)(fnptr))(renderbuffer);
 // }
-// static GLboolean glowIsTexture(uintptr_t fnptr, GLuint texture) {
-//   typedef GLboolean (*fn)(GLuint texture);
-//   return ((fn)(fnptr))(texture);
-// }
 // static void glowLinkProgram(uintptr_t fnptr, GLuint program) {
 //   typedef void (*fn)(GLuint program);
 //   ((fn)(fnptr))(program);
@@ -244,9 +240,9 @@ package gl
 //   typedef void (*fn)(GLenum func, GLint ref, GLuint mask);
 //   ((fn)(fnptr))(func, ref, mask);
 // }
-// static void glowStencilOp(uintptr_t fnptr, GLenum fail, GLenum zfail, GLenum zpass) {
-//   typedef void (*fn)(GLenum fail, GLenum zfail, GLenum zpass);
-//   ((fn)(fnptr))(fail, zfail, zpass);
+// static void glowStencilOpSeparate(uintptr_t fnptr, GLenum face, GLenum fail, GLenum zfail, GLenum zpass) {
+//   typedef void (*fn)(GLenum face, GLenum fail, GLenum zfail, GLenum zpass);
+//   ((fn)(fnptr))(face, fail, zfail, zpass);
 // }
 // static void glowTexImage2D(uintptr_t fnptr, GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void* pixels) {
 //   typedef void (*fn)(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void* pixels);
@@ -376,7 +372,6 @@ type defaultContext struct {
 	gpIsFramebuffer            C.uintptr_t
 	gpIsProgram                C.uintptr_t
 	gpIsRenderbuffer           C.uintptr_t
-	gpIsTexture                C.uintptr_t
 	gpLinkProgram              C.uintptr_t
 	gpPixelStorei              C.uintptr_t
 	gpReadPixels               C.uintptr_t
@@ -384,7 +379,7 @@ type defaultContext struct {
 	gpScissor                  C.uintptr_t
 	gpShaderSource             C.uintptr_t
 	gpStencilFunc              C.uintptr_t
-	gpStencilOp                C.uintptr_t
+	gpStencilOpSeparate        C.uintptr_t
 	gpTexImage2D               C.uintptr_t
 	gpTexParameteri            C.uintptr_t
 	gpTexSubImage2D            C.uintptr_t
@@ -653,11 +648,6 @@ func (c *defaultContext) IsRenderbuffer(renderbuffer uint32) bool {
 	return ret == TRUE
 }
 
-func (c *defaultContext) IsTexture(texture uint32) bool {
-	ret := C.glowIsTexture(c.gpIsTexture, C.GLuint(texture))
-	return ret == TRUE
-}
-
 func (c *defaultContext) LinkProgram(program uint32) {
 	C.glowLinkProgram(c.gpLinkProgram, C.GLuint(program))
 }
@@ -688,8 +678,8 @@ func (c *defaultContext) StencilFunc(xfunc uint32, ref int32, mask uint32) {
 	C.glowStencilFunc(c.gpStencilFunc, C.GLenum(xfunc), C.GLint(ref), C.GLuint(mask))
 }
 
-func (c *defaultContext) StencilOp(fail uint32, zfail uint32, zpass uint32) {
-	C.glowStencilOp(c.gpStencilOp, C.GLenum(fail), C.GLenum(zfail), C.GLenum(zpass))
+func (c *defaultContext) StencilOpSeparate(face uint32, fail uint32, zfail uint32, zpass uint32) {
+	C.glowStencilOpSeparate(c.gpStencilOpSeparate, C.GLenum(face), C.GLenum(fail), C.GLenum(zfail), C.GLenum(zpass))
 }
 
 func (c *defaultContext) TexImage2D(target uint32, level int32, internalformat int32, width int32, height int32, format uint32, xtype uint32, pixels []byte) {
@@ -832,7 +822,6 @@ func (c *defaultContext) LoadFunctions() error {
 	c.gpIsFramebuffer = C.uintptr_t(g.get("glIsFramebuffer"))
 	c.gpIsProgram = C.uintptr_t(g.get("glIsProgram"))
 	c.gpIsRenderbuffer = C.uintptr_t(g.get("glIsRenderbuffer"))
-	c.gpIsTexture = C.uintptr_t(g.get("glIsTexture"))
 	c.gpLinkProgram = C.uintptr_t(g.get("glLinkProgram"))
 	c.gpPixelStorei = C.uintptr_t(g.get("glPixelStorei"))
 	c.gpReadPixels = C.uintptr_t(g.get("glReadPixels"))
@@ -840,7 +829,7 @@ func (c *defaultContext) LoadFunctions() error {
 	c.gpScissor = C.uintptr_t(g.get("glScissor"))
 	c.gpShaderSource = C.uintptr_t(g.get("glShaderSource"))
 	c.gpStencilFunc = C.uintptr_t(g.get("glStencilFunc"))
-	c.gpStencilOp = C.uintptr_t(g.get("glStencilOp"))
+	c.gpStencilOpSeparate = C.uintptr_t(g.get("glStencilOpSeparate"))
 	c.gpTexImage2D = C.uintptr_t(g.get("glTexImage2D"))
 	c.gpTexParameteri = C.uintptr_t(g.get("glTexParameteri"))
 	c.gpTexSubImage2D = C.uintptr_t(g.get("glTexSubImage2D"))

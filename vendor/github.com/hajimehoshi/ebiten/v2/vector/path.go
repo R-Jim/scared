@@ -103,7 +103,7 @@ func (p *Path) MoveTo(x, y float32) {
 	})
 }
 
-// LineTo adds a line segument to the path, which starts from the last position of the current subpath
+// LineTo adds a line segment to the path, which starts from the last position of the current subpath
 // and ends to the given position (x, y).
 // If p doesn't have any subpaths or the last subpath is closed, LineTo sets (x, y) as the start position of a new subpath.
 func (p *Path) LineTo(x, y float32) {
@@ -396,7 +396,7 @@ func (p *Path) Close() {
 //
 // The returned vertice's SrcX and SrcY are 0, and ColorR, ColorG, ColorB, and ColorA are 1.
 //
-// The returned values are intended to be passed to DrawTriangles or DrawTrianglesShader with the EvenOdd fill rule
+// The returned values are intended to be passed to DrawTriangles or DrawTrianglesShader with the fill rule NonZero or EvenOdd
 // in order to render a complex polygon like a concave polygon, a polygon with holes, or a self-intersecting polygon.
 //
 // The returned vertices and indices should be rendered with a solid (non-transparent) color with the default Blend (source-over).
@@ -480,7 +480,7 @@ type StrokeOptions struct {
 // The returned vertice's SrcX and SrcY are 0, and ColorR, ColorG, ColorB, and ColorA are 1.
 //
 // The returned values are intended to be passed to DrawTriangles or DrawTrianglesShader with a solid (non-transparent) color
-// with the FillAll fill rule (not the EvenOdd fill rule).
+// with FillAll or NonZero fill rule, not EvenOdd fill rule.
 func (p *Path) AppendVerticesAndIndicesForStroke(vertices []ebiten.Vertex, indices []uint16, op *StrokeOptions) ([]ebiten.Vertex, []uint16) {
 	if op == nil {
 		return vertices, indices
@@ -536,7 +536,8 @@ func (p *Path) AppendVerticesAndIndicesForStroke(vertices []ebiten.Vertex, indic
 					ColorA: 1,
 				})
 			}
-			indices = append(indices, idx, idx+1, idx+2, idx+1, idx+2, idx+3)
+			// All the triangles are rendered in clockwise order to enable NonZero filling rule (#2833).
+			indices = append(indices, idx, idx+1, idx+2, idx+1, idx+3, idx+2)
 
 			// Add line joints.
 			var nextRect [4]point

@@ -15,18 +15,17 @@
 package ui
 
 import (
-	"image"
+	"errors"
 	"math"
 	"sync"
 	"syscall/js"
 	"time"
 
-	"github.com/hajimehoshi/ebiten/v2/internal/devicescale"
 	"github.com/hajimehoshi/ebiten/v2/internal/file"
 	"github.com/hajimehoshi/ebiten/v2/internal/gamepad"
 	"github.com/hajimehoshi/ebiten/v2/internal/graphicsdriver"
 	"github.com/hajimehoshi/ebiten/v2/internal/graphicsdriver/opengl"
-	"github.com/hajimehoshi/ebiten/v2/internal/hooks"
+	"github.com/hajimehoshi/ebiten/v2/internal/hook"
 )
 
 type graphicsDriverCreatorImpl struct {
@@ -43,11 +42,15 @@ func (g *graphicsDriverCreatorImpl) newOpenGL() (graphicsdriver.Graphics, error)
 }
 
 func (*graphicsDriverCreatorImpl) newDirectX() (graphicsdriver.Graphics, error) {
-	return nil, nil
+	return nil, errors.New("ui: DirectX is not supported in this environment")
 }
 
 func (*graphicsDriverCreatorImpl) newMetal() (graphicsdriver.Graphics, error) {
-	return nil, nil
+	return nil, errors.New("ui: Metal is not supported in this environment")
+}
+
+func (*graphicsDriverCreatorImpl) newPlayStation5() (graphicsdriver.Graphics, error) {
+	return nil, errors.New("ui: PlayStation 5 is not supported in this environment")
 }
 
 var (
@@ -87,7 +90,6 @@ type userInterfaceImpl struct {
 	runnableOnUnfocused bool
 	fpsMode             FPSModeType
 	renderingScheduled  bool
-	running             bool
 	cursorMode          CursorMode
 	cursorPrevMode      CursorMode
 	captureCursorLater  bool
@@ -95,17 +97,14 @@ type userInterfaceImpl struct {
 	onceUpdateCalled    bool
 	lastCaptureExitTime time.Time
 
-	lastDeviceScaleFactor float64
-
-	err error
-
-	context             *context
-	inputState          InputState
-	cursorXInClient     float64
-	cursorYInClient     float64
-	origCursorXInClient float64
-	origCursorYInClient float64
-	touchesInClient     []touchInClient
+	context                   *context
+	inputState                InputState
+	keyDurationsByKeyProperty map[Key]int
+	cursorXInClient           float64
+	cursorYInClient           float64
+	origCursorXInClient       float64
+	origCursorYInClient       float64
+	touchesInClient           []touchInClient
 
 	savedCursorX              float64
 	savedCursorY              float64
@@ -119,37 +118,21 @@ type userInterfaceImpl struct {
 	dropFileM sync.Mutex
 }
 
-func init() {
-	theUI.userInterfaceImpl = userInterfaceImpl{
-		runnableOnUnfocused: true,
-		savedCursorX:        math.NaN(),
-		savedCursorY:        math.NaN(),
-	}
-}
-
 var (
 	window                = js.Global().Get("window")
 	document              = js.Global().Get("document")
+	screen                = js.Global().Get("screen")
 	canvas                js.Value
 	requestAnimationFrame = js.Global().Get("requestAnimationFrame")
 	setTimeout            = js.Global().Get("setTimeout")
 )
 
 var (
-	documentHasFocus js.Value
-	documentHidden   js.Value
+	documentHasFocus = document.Get("hasFocus").Call("bind", document)
+	documentHidden   = js.Global().Get("Object").Call("getOwnPropertyDescriptor", js.Global().Get("Document").Get("prototype"), "hidden").Get("get").Call("bind", document)
 )
 
-func init() {
-	documentHasFocus = document.Get("hasFocus").Call("bind", document)
-	documentHidden = js.Global().Get("Object").Call("getOwnPropertyDescriptor", js.Global().Get("Document").Get("prototype"), "hidden").Get("get").Call("bind", document)
-}
-
-func (u *userInterfaceImpl) ScreenSizeInFullscreen() (int, int) {
-	return window.Get("innerWidth").Int(), window.Get("innerHeight").Int()
-}
-
-func (u *userInterfaceImpl) SetFullscreen(fullscreen bool) {
+func (u *UserInterface) SetFullscreen(fullscreen bool) {
 	if !canvas.Truthy() {
 		return
 	}
@@ -160,8 +143,8 @@ func (u *userInterfaceImpl) SetFullscreen(fullscreen bool) {
 		return
 	}
 
-	if theUI.cursorMode == CursorModeCaptured {
-		theUI.saveCursorPosition()
+	if u.cursorMode == CursorModeCaptured {
+		u.saveCursorPosition()
 	}
 
 	if fullscreen {
@@ -180,7 +163,7 @@ func (u *userInterfaceImpl) SetFullscreen(fullscreen bool) {
 	f.Call("bind", document).Invoke()
 }
 
-func (u *userInterfaceImpl) IsFullscreen() bool {
+func (u *UserInterface) IsFullscreen() bool {
 	if !document.Truthy() {
 		return false
 	}
@@ -190,34 +173,38 @@ func (u *userInterfaceImpl) IsFullscreen() bool {
 	return true
 }
 
-func (u *userInterfaceImpl) IsFocused() bool {
+func (u *UserInterface) IsFocused() bool {
 	return u.isFocused()
 }
 
-func (u *userInterfaceImpl) SetRunnableOnUnfocused(runnableOnUnfocused bool) {
+func (u *UserInterface) SetRunnableOnUnfocused(runnableOnUnfocused bool) {
 	u.runnableOnUnfocused = runnableOnUnfocused
 }
 
-func (u *userInterfaceImpl) IsRunnableOnUnfocused() bool {
+func (u *UserInterface) IsRunnableOnUnfocused() bool {
 	return u.runnableOnUnfocused
 }
 
-func (u *userInterfaceImpl) SetFPSMode(mode FPSModeType) {
+func (u *UserInterface) FPSMode() FPSModeType {
+	return u.fpsMode
+}
+
+func (u *UserInterface) SetFPSMode(mode FPSModeType) {
 	u.fpsMode = mode
 }
 
-func (u *userInterfaceImpl) ScheduleFrame() {
+func (u *UserInterface) ScheduleFrame() {
 	u.renderingScheduled = true
 }
 
-func (u *userInterfaceImpl) CursorMode() CursorMode {
+func (u *UserInterface) CursorMode() CursorMode {
 	if !canvas.Truthy() {
 		return CursorModeHidden
 	}
 	return u.cursorMode
 }
 
-func (u *userInterfaceImpl) SetCursorMode(mode CursorMode) {
+func (u *UserInterface) SetCursorMode(mode CursorMode) {
 	if mode == CursorModeCaptured && !u.canCaptureCursor() {
 		u.captureCursorLater = true
 		return
@@ -225,7 +212,7 @@ func (u *userInterfaceImpl) SetCursorMode(mode CursorMode) {
 	u.setCursorMode(mode)
 }
 
-func (u *userInterfaceImpl) setCursorMode(mode CursorMode) {
+func (u *UserInterface) setCursorMode(mode CursorMode) {
 	u.captureCursorLater = false
 
 	if !canvas.Truthy() {
@@ -251,21 +238,21 @@ func (u *userInterfaceImpl) setCursorMode(mode CursorMode) {
 	}
 }
 
-func (u *userInterfaceImpl) recoverCursorMode() {
-	if theUI.cursorPrevMode == CursorModeCaptured {
+func (u *UserInterface) recoverCursorMode() {
+	if u.cursorPrevMode == CursorModeCaptured {
 		panic("ui: cursorPrevMode must not be CursorModeCaptured at recoverCursorMode")
 	}
 	u.SetCursorMode(u.cursorPrevMode)
 }
 
-func (u *userInterfaceImpl) CursorShape() CursorShape {
+func (u *UserInterface) CursorShape() CursorShape {
 	if !canvas.Truthy() {
 		return CursorShapeDefault
 	}
 	return u.cursorShape
 }
 
-func (u *userInterfaceImpl) SetCursorShape(shape CursorShape) {
+func (u *UserInterface) SetCursorShape(shape CursorShape) {
 	if !canvas.Truthy() {
 		return
 	}
@@ -279,11 +266,7 @@ func (u *userInterfaceImpl) SetCursorShape(shape CursorShape) {
 	}
 }
 
-func (u *userInterfaceImpl) DeviceScaleFactor() float64 {
-	return devicescale.GetAt(0, 0)
-}
-
-func (u *userInterfaceImpl) outsideSize() (float64, float64) {
+func (u *UserInterface) outsideSize() (float64, float64) {
 	if document.Truthy() {
 		body := document.Get("body")
 		bw := body.Get("clientWidth").Float()
@@ -295,14 +278,14 @@ func (u *userInterfaceImpl) outsideSize() (float64, float64) {
 	return 640, 480
 }
 
-func (u *userInterfaceImpl) suspended() bool {
+func (u *UserInterface) suspended() bool {
 	if u.runnableOnUnfocused {
 		return false
 	}
 	return !u.isFocused()
 }
 
-func (u *userInterfaceImpl) isFocused() bool {
+func (u *UserInterface) isFocused() bool {
 	if !documentHasFocus.Invoke().Bool() {
 		return false
 	}
@@ -321,26 +304,26 @@ func (u *userInterfaceImpl) isFocused() bool {
 // > Pointer lock is a transient activation-gated API, therefore a requestPointerLock() call
 // > MUST fail if the relevant global object of this does not have transient activation.
 // > This prevents locking upon initial navigation or re-acquiring lock without user's attention.
-func (u *userInterfaceImpl) canCaptureCursor() bool {
+func (u *UserInterface) canCaptureCursor() bool {
 	// 1.5 [sec] seems enough in the real world.
 	return time.Now().Sub(u.lastCaptureExitTime) >= 1500*time.Millisecond
 }
 
-func (u *userInterfaceImpl) update() error {
+func (u *UserInterface) update() error {
 	if u.captureCursorLater && u.canCaptureCursor() {
 		u.setCursorMode(CursorModeCaptured)
 	}
 
 	if u.suspended() {
-		return hooks.SuspendAudio()
+		return hook.SuspendAudio()
 	}
-	if err := hooks.ResumeAudio(); err != nil {
+	if err := hook.ResumeAudio(); err != nil {
 		return err
 	}
 	return u.updateImpl(false)
 }
 
-func (u *userInterfaceImpl) updateImpl(force bool) error {
+func (u *UserInterface) updateImpl(force bool) error {
 	// Guard updateImpl as this function cannot be invoked until this finishes (#2339).
 	u.m.Lock()
 	defer u.m.Unlock()
@@ -354,26 +337,28 @@ func (u *userInterfaceImpl) updateImpl(force bool) error {
 		return err
 	}
 
-	a := u.DeviceScaleFactor()
-	if u.lastDeviceScaleFactor != a {
+	if !u.onceUpdateCalled {
 		u.updateScreenSize()
 	}
-	u.lastDeviceScaleFactor = a
+
+	// TODO: If DeviceScaleFactor changes, call updateScreenSize.
+	// Now there is not a good way to detect the change.
+	// See also https://crbug.com/123694.
 
 	w, h := u.outsideSize()
 	if force {
-		if err := u.context.forceUpdateFrame(u.graphicsDriver, w, h, u.DeviceScaleFactor(), u, nil); err != nil {
+		if err := u.context.forceUpdateFrame(u.graphicsDriver, w, h, theMonitor.DeviceScaleFactor(), u); err != nil {
 			return err
 		}
 	} else {
-		if err := u.context.updateFrame(u.graphicsDriver, w, h, u.DeviceScaleFactor(), u, nil); err != nil {
+		if err := u.context.updateFrame(u.graphicsDriver, w, h, theMonitor.DeviceScaleFactor(), u); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (u *userInterfaceImpl) needsUpdate() bool {
+func (u *UserInterface) needsUpdate() bool {
 	if u.fpsMode != FPSModeVsyncOffMinimum {
 		return true
 	}
@@ -387,21 +372,21 @@ func (u *userInterfaceImpl) needsUpdate() bool {
 	return false
 }
 
-func (u *userInterfaceImpl) loop(game Game) <-chan error {
-	u.context = newContext(game)
-
+func (u *UserInterface) loopGame() error {
 	errCh := make(chan error, 1)
 	reqStopAudioCh := make(chan struct{})
 	resStopAudioCh := make(chan struct{})
 
 	var cf js.Func
 	f := func() {
-		if u.err != nil {
-			errCh <- u.err
+		if err := u.error(); err != nil {
+			errCh <- err
 			return
 		}
 		if u.needsUpdate() {
-			u.onceUpdateCalled = true
+			defer func() {
+				u.onceUpdateCalled = true
+			}()
 			u.renderingScheduled = false
 			if err := u.update(); err != nil {
 				close(reqStopAudioCh)
@@ -432,7 +417,7 @@ func (u *userInterfaceImpl) loop(game Game) <-chan error {
 	go f()
 
 	// Run another loop to watch suspended() as the above update function is never called when the tab is hidden.
-	// To check the document's visiblity, visibilitychange event should usually be used. However, this event is
+	// To check the document's visibility, visibilitychange event should usually be used. However, this event is
 	// not reliable and sometimes it is not fired (#961). Then, watch the state regularly instead.
 	go func() {
 		defer close(resStopAudioCh)
@@ -455,12 +440,12 @@ func (u *userInterfaceImpl) loop(game Game) <-chan error {
 			select {
 			case <-t.C:
 				if u.suspended() {
-					if err := hooks.SuspendAudio(); err != nil {
+					if err := hook.SuspendAudio(); err != nil {
 						errCh <- err
 						return
 					}
 				} else {
-					if err := hooks.ResumeAudio(); err != nil {
+					if err := hook.ResumeAudio(); err != nil {
 						errCh <- err
 						return
 					}
@@ -471,13 +456,19 @@ func (u *userInterfaceImpl) loop(game Game) <-chan error {
 		}
 	}()
 
-	return errCh
+	return <-errCh
 }
 
-func init() {
-	// docuemnt is undefined on node.js
+func (u *UserInterface) init() error {
+	u.userInterfaceImpl = userInterfaceImpl{
+		runnableOnUnfocused: true,
+		savedCursorX:        math.NaN(),
+		savedCursorY:        math.NaN(),
+	}
+
+	// document is undefined on node.js
 	if !document.Truthy() {
-		return
+		return nil
 	}
 
 	if !document.Get("body").Truthy() {
@@ -489,7 +480,7 @@ func init() {
 		<-ch
 	}
 
-	setWindowEventHandlers(window)
+	u.setWindowEventHandlers(window)
 
 	// Adjust the initial scale to 1.
 	// https://developer.mozilla.org/en/docs/Mozilla/Mobile/Viewport_meta_tag
@@ -525,7 +516,7 @@ func init() {
 	canvas.Call("setAttribute", "tabindex", 1)
 	canvas.Get("style").Set("outline", "none")
 
-	setCanvasEventHandlers(canvas)
+	u.setCanvasEventHandlers(canvas)
 
 	// Pointer Lock
 	document.Call("addEventListener", "pointerlockchange", js.FuncOf(func(this js.Value, args []js.Value) any {
@@ -535,10 +526,10 @@ func init() {
 		// Recover the state correctly when the pointer lock exits.
 
 		// A user can exit the pointer lock by pressing ESC. In this case, sync the cursor mode state.
-		if theUI.cursorMode == CursorModeCaptured {
-			theUI.recoverCursorMode()
+		if u.cursorMode == CursorModeCaptured {
+			u.recoverCursorMode()
 		}
-		theUI.recoverCursorPosition()
+		u.recoverCursorPosition()
 		return nil
 	}))
 	document.Call("addEventListener", "pointerlockerror", js.FuncOf(func(this js.Value, args []js.Value) any {
@@ -553,17 +544,19 @@ func init() {
 		js.Global().Get("console").Call("error", "webkitfullscreenerror event is fired. 'allow=\"fullscreen\"' or 'allowfullscreen' might be required at an iframe. This function on browsers must be called as a result of a gestural interaction or orientation change.")
 		return nil
 	}))
+
+	return nil
 }
 
-func setWindowEventHandlers(v js.Value) {
+func (u *UserInterface) setWindowEventHandlers(v js.Value) {
 	v.Call("addEventListener", "resize", js.FuncOf(func(this js.Value, args []js.Value) any {
-		theUI.updateScreenSize()
+		u.updateScreenSize()
 
 		// updateImpl can block. Use goroutine.
 		// See https://pkg.go.dev/syscall/js#FuncOf.
 		go func() {
-			if err := theUI.updateImpl(true); err != nil && theUI.err != nil {
-				theUI.err = err
+			if err := u.updateImpl(true); err != nil {
+				u.setError(err)
 				return
 			}
 		}()
@@ -571,7 +564,7 @@ func setWindowEventHandlers(v js.Value) {
 	}))
 }
 
-func setCanvasEventHandlers(v js.Value) {
+func (u *UserInterface) setCanvasEventHandlers(v js.Value) {
 	// Keyboard
 	v.Call("addEventListener", "keydown", js.FuncOf(func(this js.Value, args []js.Value) any {
 		// Focus the canvas explicitly to activate tha game (#961).
@@ -579,8 +572,8 @@ func setCanvasEventHandlers(v js.Value) {
 
 		e := args[0]
 		e.Call("preventDefault")
-		if err := theUI.updateInputFromEvent(e); err != nil && theUI.err != nil {
-			theUI.err = err
+		if err := u.updateInputFromEvent(e); err != nil {
+			u.setError(err)
 			return nil
 		}
 		return nil
@@ -588,8 +581,8 @@ func setCanvasEventHandlers(v js.Value) {
 	v.Call("addEventListener", "keyup", js.FuncOf(func(this js.Value, args []js.Value) any {
 		e := args[0]
 		e.Call("preventDefault")
-		if err := theUI.updateInputFromEvent(e); err != nil && theUI.err != nil {
-			theUI.err = err
+		if err := u.updateInputFromEvent(e); err != nil {
+			u.setError(err)
 			return nil
 		}
 		return nil
@@ -602,8 +595,8 @@ func setCanvasEventHandlers(v js.Value) {
 
 		e := args[0]
 		e.Call("preventDefault")
-		if err := theUI.updateInputFromEvent(e); err != nil && theUI.err != nil {
-			theUI.err = err
+		if err := u.updateInputFromEvent(e); err != nil {
+			u.setError(err)
 			return nil
 		}
 		return nil
@@ -611,8 +604,8 @@ func setCanvasEventHandlers(v js.Value) {
 	v.Call("addEventListener", "mouseup", js.FuncOf(func(this js.Value, args []js.Value) any {
 		e := args[0]
 		e.Call("preventDefault")
-		if err := theUI.updateInputFromEvent(e); err != nil && theUI.err != nil {
-			theUI.err = err
+		if err := u.updateInputFromEvent(e); err != nil {
+			u.setError(err)
 			return nil
 		}
 		return nil
@@ -620,8 +613,8 @@ func setCanvasEventHandlers(v js.Value) {
 	v.Call("addEventListener", "mousemove", js.FuncOf(func(this js.Value, args []js.Value) any {
 		e := args[0]
 		e.Call("preventDefault")
-		if err := theUI.updateInputFromEvent(e); err != nil && theUI.err != nil {
-			theUI.err = err
+		if err := u.updateInputFromEvent(e); err != nil {
+			u.setError(err)
 			return nil
 		}
 		return nil
@@ -629,8 +622,8 @@ func setCanvasEventHandlers(v js.Value) {
 	v.Call("addEventListener", "wheel", js.FuncOf(func(this js.Value, args []js.Value) any {
 		e := args[0]
 		e.Call("preventDefault")
-		if err := theUI.updateInputFromEvent(e); err != nil && theUI.err != nil {
-			theUI.err = err
+		if err := u.updateInputFromEvent(e); err != nil {
+			u.setError(err)
 			return nil
 		}
 		return nil
@@ -643,8 +636,8 @@ func setCanvasEventHandlers(v js.Value) {
 
 		e := args[0]
 		e.Call("preventDefault")
-		if err := theUI.updateInputFromEvent(e); err != nil && theUI.err != nil {
-			theUI.err = err
+		if err := u.updateInputFromEvent(e); err != nil {
+			u.setError(err)
 			return nil
 		}
 		return nil
@@ -652,8 +645,8 @@ func setCanvasEventHandlers(v js.Value) {
 	v.Call("addEventListener", "touchend", js.FuncOf(func(this js.Value, args []js.Value) any {
 		e := args[0]
 		e.Call("preventDefault")
-		if err := theUI.updateInputFromEvent(e); err != nil && theUI.err != nil {
-			theUI.err = err
+		if err := u.updateInputFromEvent(e); err != nil {
+			u.setError(err)
 			return nil
 		}
 		return nil
@@ -661,8 +654,8 @@ func setCanvasEventHandlers(v js.Value) {
 	v.Call("addEventListener", "touchmove", js.FuncOf(func(this js.Value, args []js.Value) any {
 		e := args[0]
 		e.Call("preventDefault")
-		if err := theUI.updateInputFromEvent(e); err != nil && theUI.err != nil {
-			theUI.err = err
+		if err := u.updateInputFromEvent(e); err != nil {
+			u.setError(err)
 			return nil
 		}
 		return nil
@@ -697,12 +690,18 @@ func setCanvasEventHandlers(v js.Value) {
 			return nil
 		}
 
-		go theUI.appendDroppedFiles(data)
+		go u.appendDroppedFiles(data)
+		return nil
+	}))
+
+	// Blur
+	v.Call("addEventListener", "blur", js.FuncOf(func(this js.Value, args []js.Value) any {
+		u.inputState.resetForBlur()
 		return nil
 	}))
 }
 
-func (u *userInterfaceImpl) appendDroppedFiles(data js.Value) {
+func (u *UserInterface) appendDroppedFiles(data js.Value) {
 	u.dropFileM.Lock()
 	defer u.dropFileM.Unlock()
 
@@ -715,7 +714,7 @@ func (u *userInterfaceImpl) appendDroppedFiles(data js.Value) {
 	u.inputState.DroppedFiles = file.NewFileEntryFS(fs)
 }
 
-func (u *userInterfaceImpl) forceUpdateOnMinimumFPSMode() {
+func (u *UserInterface) forceUpdateOnMinimumFPSMode() {
 	if u.fpsMode != FPSModeVsyncOffMinimum {
 		return
 	}
@@ -723,13 +722,13 @@ func (u *userInterfaceImpl) forceUpdateOnMinimumFPSMode() {
 	// updateImpl can block. Use goroutine.
 	// See https://pkg.go.dev/syscall/js#FuncOf.
 	go func() {
-		if err := u.updateImpl(true); err != nil && u.err != nil {
-			u.err = err
+		if err := u.updateImpl(true); err != nil {
+			u.setError(err)
 		}
 	}()
 }
 
-func (u *userInterfaceImpl) Run(game Game, options *RunOptions) error {
+func (u *UserInterface) initOnMainThread(options *RunOptions) error {
 	if !options.InitUnfocused && window.Truthy() {
 		// Do not focus the canvas when the current document is in an iframe.
 		// Otherwise, the parent page tries to focus the iframe on every loading, which is annoying (#1373).
@@ -738,14 +737,15 @@ func (u *userInterfaceImpl) Run(game Game, options *RunOptions) error {
 			canvas.Call("focus")
 		}
 	}
-	u.running = true
-	g, err := newGraphicsDriver(&graphicsDriverCreatorImpl{
+
+	g, lib, err := newGraphicsDriver(&graphicsDriverCreatorImpl{
 		canvas: canvas,
 	}, options.GraphicsLibrary)
 	if err != nil {
 		return err
 	}
 	u.graphicsDriver = g
+	u.setGraphicsLibrary(lib)
 
 	if bodyStyle := document.Get("body").Get("style"); options.ScreenTransparent {
 		bodyStyle.Set("backgroundColor", "transparent")
@@ -753,61 +753,72 @@ func (u *userInterfaceImpl) Run(game Game, options *RunOptions) error {
 		bodyStyle.Set("backgroundColor", "#000")
 	}
 
-	return <-u.loop(game)
+	return nil
 }
 
-func (u *userInterfaceImpl) updateScreenSize() {
+func (u *UserInterface) updateScreenSize() {
 	if document.Truthy() {
 		body := document.Get("body")
-		bw := int(body.Get("clientWidth").Float() * u.DeviceScaleFactor())
-		bh := int(body.Get("clientHeight").Float() * u.DeviceScaleFactor())
+		f := theMonitor.DeviceScaleFactor()
+		bw := int(body.Get("clientWidth").Float() * f)
+		bh := int(body.Get("clientHeight").Float() * f)
 		canvas.Set("width", bw)
 		canvas.Set("height", bh)
 	}
 }
 
-func (u *userInterfaceImpl) readInputState(inputState *InputState) {
+func (u *UserInterface) readInputState(inputState *InputState) {
 	u.inputState.copyAndReset(inputState)
 	u.keyboardLayoutMap = js.Value{}
 }
 
-func (u *userInterfaceImpl) Window() Window {
+func (u *UserInterface) Window() Window {
 	return &nullWindow{}
 }
 
-type Monitor struct{}
+type Monitor struct {
+	deviceScaleFactor float64
+}
 
 var theMonitor = &Monitor{}
-
-func (m *Monitor) Bounds() image.Rectangle {
-	screen := window.Get("screen")
-	w := screen.Get("width").Int()
-	h := screen.Get("height").Int()
-	return image.Rect(0, 0, w, h)
-}
 
 func (m *Monitor) Name() string {
 	return ""
 }
 
-func (u *userInterfaceImpl) AppendMonitors(mons []*Monitor) []*Monitor {
+func (m *Monitor) DeviceScaleFactor() float64 {
+	if m.deviceScaleFactor != 0 {
+		return m.deviceScaleFactor
+	}
+
+	ratio := window.Get("devicePixelRatio").Float()
+	if ratio == 0 {
+		ratio = 1
+	}
+	m.deviceScaleFactor = ratio
+	return m.deviceScaleFactor
+}
+
+func (m *Monitor) Size() (int, int) {
+	return screen.Get("width").Int(), screen.Get("height").Int()
+}
+
+func (u *UserInterface) AppendMonitors(mons []*Monitor) []*Monitor {
 	return append(mons, theMonitor)
 }
 
-func (u *userInterfaceImpl) Monitor() *Monitor {
+func (u *UserInterface) Monitor() *Monitor {
 	return theMonitor
 }
 
-func (u *userInterfaceImpl) beginFrame() {
-}
-
-func (u *userInterfaceImpl) endFrame() {
-}
-
-func (u *userInterfaceImpl) updateIconIfNeeded() error {
+func (u *UserInterface) updateIconIfNeeded() error {
 	return nil
 }
 
 func IsScreenTransparentAvailable() bool {
 	return true
+}
+
+func dipToNativePixels(x float64, scale float64) float64 {
+	return x
 }

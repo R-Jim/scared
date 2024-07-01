@@ -14,10 +14,6 @@
 
 package graphics
 
-import (
-	"math"
-)
-
 const (
 	ShaderImageCount = 4
 
@@ -44,20 +40,13 @@ const (
 
 const (
 	VertexFloatCount = 8
-
-	// MaxVerticesCount is the maximum number of vertices for one draw call.
-	// This value is 2^16 - 1 = 65535, as the index type is uint16.
-	// This value cannot be exactly 2^16 == 65536 especially with WebGL 2, as 65536th vertex is not rendered correctly.
-	// See https://registry.khronos.org/webgl/specs/latest/2.0/#5.18 .
-	MaxVerticesCount     = math.MaxUint16
-	MaxVertexFloatsCount = MaxVerticesCount * VertexFloatCount
 )
 
 var (
-	quadIndices = []uint16{0, 1, 2, 1, 2, 3}
+	quadIndices = []uint32{0, 1, 2, 1, 2, 3}
 )
 
-func QuadIndices() []uint16 {
+func QuadIndices() []uint32 {
 	return quadIndices
 }
 

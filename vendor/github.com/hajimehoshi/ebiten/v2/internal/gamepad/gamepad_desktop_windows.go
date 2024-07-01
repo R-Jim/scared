@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !nintendosdk
-
 package gamepad
 
 import (
@@ -719,6 +717,10 @@ func (g *nativeGamepadDesktop) hatCount() int {
 		return len(g.dinputHats)
 	}
 	return 1
+}
+
+func (g *nativeGamepadDesktop) isAxisReady(axis int) bool {
+	return axis >= 0 && axis < g.axisCount()
 }
 
 func (g *nativeGamepadDesktop) axisValue(axis int) float64 {

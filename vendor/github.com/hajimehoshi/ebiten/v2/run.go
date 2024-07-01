@@ -157,14 +157,14 @@ var (
 //
 // SetScreenClearedEveryFrame is concurrent-safe.
 func SetScreenClearedEveryFrame(cleared bool) {
-	ui.SetScreenClearedEveryFrame(cleared)
+	ui.Get().SetScreenClearedEveryFrame(cleared)
 }
 
 // IsScreenClearedEveryFrame returns true if the frame isn't cleared at the beginning.
 //
 // IsScreenClearedEveryFrame is concurrent-safe.
 func IsScreenClearedEveryFrame() bool {
-	return ui.IsScreenClearedEveryFrame()
+	return ui.Get().IsScreenClearedEveryFrame()
 }
 
 // SetScreenFilterEnabled enables/disables the use of the "screen" filter Ebitengine uses.
@@ -253,6 +253,26 @@ type RunGameOptions struct {
 	//
 	// The default (zero) value is false, which means that an icon is shown on a taskbar.
 	SkipTaskbar bool
+
+	// SingleThread indicates whether the single thread mode is used explicitly or not.
+	// The single thread mode disables Ebitengine's thread safety to unlock maximum performance.
+	// If you use this you will have to manage threads yourself.
+	// Functions like `SetWindowSize` will no longer be concurrent-safe with this build tag.
+	// They must be called from the main thread or the same goroutine as the given game's callback functions like Update.
+	//
+	// SingleThread works only with desktops and consoles.
+	//
+	// If SingleThread is false, and if the build tag `ebitenginesinglethread` is specified,
+	// the single thread mode is used.
+	//
+	// The default (zero) value is false, which means that the single thread mode is disabled.
+	SingleThread bool
+
+	// X11DisplayName is a class name in the ICCCM WM_CLASS window property.
+	X11ClassName string
+
+	// X11InstanceName is an instance name in the ICCCM WM_CLASS window property.
+	X11InstanceName string
 }
 
 // RunGameWithOptions starts the main loop and runs the game with the specified options.
@@ -332,6 +352,8 @@ func isRunGameEnded() bool {
 //
 // ScreenSizeInFullscreen must be called on the main thread before ebiten.RunGame, and is concurrent-safe after
 // ebiten.RunGame.
+//
+// Deprecated: as of v2.6. Use Monitor().Size() instead.
 func ScreenSizeInFullscreen() (int, int) {
 	return ui.Get().ScreenSizeInFullscreen()
 }
@@ -460,26 +482,26 @@ func SetRunnableOnUnfocused(runnableOnUnfocused bool) {
 // DeviceScaleFactor must be called on the main thread before the main loop, and is concurrent-safe after the main
 // loop.
 //
-// DeviceScaleFactor is concurrent-safe.
-//
 // BUG: DeviceScaleFactor value is not affected by SetWindowPosition before RunGame (#1575).
+//
+// Deprecated: as of v2.6. Use Monitor().DeviceScaleFactor() instead.
 func DeviceScaleFactor() float64 {
-	return ui.Get().DeviceScaleFactor()
+	return Monitor().DeviceScaleFactor()
 }
 
 // IsVsyncEnabled returns a boolean value indicating whether
 // the game uses the display's vsync.
 func IsVsyncEnabled() bool {
-	return ui.FPSMode() == ui.FPSModeVsyncOn
+	return ui.Get().FPSMode() == ui.FPSModeVsyncOn
 }
 
 // SetVsyncEnabled sets a boolean value indicating whether
 // the game uses the display's vsync.
 func SetVsyncEnabled(enabled bool) {
 	if enabled {
-		ui.SetFPSMode(ui.FPSModeVsyncOn)
+		ui.Get().SetFPSMode(ui.FPSModeVsyncOn)
 	} else {
-		ui.SetFPSMode(ui.FPSModeVsyncOffMaximum)
+		ui.Get().SetFPSMode(ui.FPSModeVsyncOffMaximum)
 	}
 }
 
@@ -526,7 +548,7 @@ const (
 //
 // Deprecated: as of v2.5. Use SetVsyncEnabled instead.
 func FPSMode() FPSModeType {
-	return ui.FPSMode()
+	return ui.Get().FPSMode()
 }
 
 // SetFPSMode sets the FPS mode.
@@ -536,7 +558,7 @@ func FPSMode() FPSModeType {
 //
 // Deprecated: as of v2.5. Use SetVsyncEnabled instead.
 func SetFPSMode(mode FPSModeType) {
-	ui.SetFPSMode(mode)
+	ui.Get().SetFPSMode(mode)
 }
 
 // ScheduleFrame schedules a next frame when the current FPS mode is FPSModeVsyncOffMinimum.
@@ -564,7 +586,7 @@ func MaxTPS() int {
 }
 
 // ActualTPS returns the current TPS (ticks per second),
-// that represents how many Update function is called in a second.
+// that represents how many times Update function is called in a second.
 //
 // This value is for measurement and/or debug, and your game logic should not rely on this value.
 //
@@ -574,7 +596,7 @@ func ActualTPS() float64 {
 }
 
 // CurrentTPS returns the current TPS (ticks per second),
-// that represents how many Update function is called in a second.
+// that represents how many times Update function is called in a second.
 //
 // Deprecated: as of v2.4. Use ActualTPS instead.
 func CurrentTPS() float64 {
@@ -590,7 +612,7 @@ const SyncWithFPS = clock.SyncWithFPS
 const UncappedTPS = SyncWithFPS
 
 // SetTPS sets the maximum TPS (ticks per second),
-// that represents how many updating function is called per second.
+// that represents how many times updating function is called per second.
 // The initial value is 60.
 //
 // If tps is SyncWithFPS, TPS is uncapped and the game is updated per frame.
@@ -602,7 +624,7 @@ func SetTPS(tps int) {
 }
 
 // SetMaxTPS sets the maximum TPS (ticks per second),
-// that represents how many updating function is called per second.
+// that represents how many times updating function is called per second.
 //
 // Deprecated: as of v2.4. Use SetTPS instead.
 func SetMaxTPS(tps int) {
@@ -661,17 +683,34 @@ func SetInitFocused(focused bool) {
 var initUnfocused int32 = 0
 
 func toUIRunOptions(options *RunGameOptions) *ui.RunOptions {
+	const (
+		defaultX11ClassName    = "Ebitengine-Application"
+		defaultX11InstanceName = "ebitengine-application"
+	)
+
 	if options == nil {
 		return &ui.RunOptions{
 			InitUnfocused:     atomic.LoadInt32(&initUnfocused) != 0,
 			ScreenTransparent: atomic.LoadInt32(&screenTransparent) != 0,
+			X11ClassName:      defaultX11ClassName,
+			X11InstanceName:   defaultX11InstanceName,
 		}
+	}
+
+	if options.X11ClassName == "" {
+		options.X11ClassName = defaultX11ClassName
+	}
+	if options.X11InstanceName == "" {
+		options.X11InstanceName = defaultX11InstanceName
 	}
 	return &ui.RunOptions{
 		GraphicsLibrary:   ui.GraphicsLibrary(options.GraphicsLibrary),
 		InitUnfocused:     options.InitUnfocused,
 		ScreenTransparent: options.ScreenTransparent,
 		SkipTaskbar:       options.SkipTaskbar,
+		SingleThread:      options.SingleThread,
+		X11ClassName:      options.X11ClassName,
+		X11InstanceName:   options.X11InstanceName,
 	}
 }
 

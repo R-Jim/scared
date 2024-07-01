@@ -28,10 +28,10 @@ const screenShaderSrc = `//kage:unit pixels
 
 package main
 
-func Fragment(position vec4, texCoord vec2, color vec4) vec4 {
+func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 	// Blend source colors in a square region, which size is 1/scale.
 	scale := imageDstSize()/imageSrc0Size()
-	pos := texCoord
+	pos := srcPos
 	p0 := pos - 1/2.0/scale
 	p1 := pos + 1/2.0/scale
 
@@ -87,7 +87,7 @@ func newGameForUI(game Game, transparent bool) *gameForUI {
 
 func (g *gameForUI) NewOffscreenImage(width, height int) *ui.Image {
 	if g.offscreen != nil {
-		g.offscreen.Dispose()
+		g.offscreen.Deallocate()
 		g.offscreen = nil
 	}
 
@@ -96,8 +96,8 @@ func (g *gameForUI) NewOffscreenImage(width, height int) *ui.Image {
 	// An image on an atlas is surrounded by a transparent edge,
 	// and the shader program unexpectedly picks the pixel on the edges.
 	imageType := atlas.ImageTypeUnmanaged
-	if ui.IsScreenClearedEveryFrame() {
-		// A violatile image is also always isolated.
+	if ui.Get().IsScreenClearedEveryFrame() {
+		// A volatile image is also always isolated.
 		imageType = atlas.ImageTypeVolatile
 	}
 	g.offscreen = newImage(image.Rect(0, 0, width, height), imageType)
@@ -106,7 +106,7 @@ func (g *gameForUI) NewOffscreenImage(width, height int) *ui.Image {
 
 func (g *gameForUI) NewScreenImage(width, height int) *ui.Image {
 	if g.screen != nil {
-		g.screen.Dispose()
+		g.screen.Deallocate()
 		g.screen = nil
 	}
 

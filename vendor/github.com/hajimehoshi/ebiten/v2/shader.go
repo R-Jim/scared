@@ -50,9 +50,31 @@ func NewShader(src []byte) (*Shader, error) {
 
 // Dispose disposes the shader program.
 // After disposing, the shader is no longer available.
+//
+// Deprecated: as of v2.7. Use Deallocate instead.
 func (s *Shader) Dispose() {
-	s.shader.MarkDisposed()
+	s.shader.Deallocate()
 	s.shader = nil
+}
+
+func (s *Shader) isDisposed() bool {
+	return s.shader == nil
+}
+
+// Deallocate deallocates the internal state of the shader.
+// Even after Deallocate is called, the shader is still available.
+// In this case, the shader's internal state is allocated again.
+//
+// Usually, you don't have to call Deallocate since the internal state is automatically released by GC.
+// However, if you are sure that the shader is no longer used but not sure how this shader object is referred,
+// you can call Deallocate to make sure that the internal state is deallocated.
+//
+// If the shader is disposed, Deallocate does nothing.
+func (s *Shader) Deallocate() {
+	if s.shader == nil {
+		return
+	}
+	s.shader.Deallocate()
 }
 
 func (s *Shader) appendUniforms(dst []uint32, uniforms map[string]any) []uint32 {

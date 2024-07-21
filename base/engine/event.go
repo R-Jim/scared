@@ -36,6 +36,10 @@ func (e Effect[model]) NewEvent(entityID uuid.UUID, data model) Event {
 	}
 }
 
+func (e Effect[model]) ParseData(event Event) model {
+	return event.Data.(model)
+}
+
 type Event struct {
 	ID       uuid.UUID
 	EntityID uuid.UUID

@@ -1,14 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
 	"image/color"
 	"log"
 	"thief/base/engine"
-	"thief/scared"
+	"thief/scared/animator"
 	"thief/scared/instance"
-	"thief/scared/ship"
-	"thief/scared/spawnership"
-	"thief/scared/weapon"
+	"thief/scared/model"
+	"thief/scared/projectors"
 
 	"github.com/google/uuid"
 	"github.com/hajimehoshi/ebiten/v2"
@@ -17,9 +18,14 @@ import (
 )
 
 const (
-	SHIP_CHARACTER = "P"
+	SHIP_CHARACTER   = "P"
+	KNIGHT_CHARACTER = "K"
+
+	RUNE_CHARACTER = "R"
 
 	SOUL_CHARACTER = "E"
+
+	CHURCH_CHARACTER = "C"
 )
 
 var (
@@ -32,93 +38,160 @@ type EnemyCrons struct {
 }
 
 type Game struct {
-	ComposerLifeCycles     []*engine.ComposerLifeCycle
-	ComposerExternalInputs map[string]*engine.ComposerExternalInput
-	ComposerSpawners       []*engine.ComposerSpawner
-	ComposerDestroyers     []*engine.ComposerDestroyer
-
-	SpawnerIDMappings map[scared.EntityType]uuid.UUID
+	Animators []engine.Animator
 }
 
 func (g *Game) Update() error {
-	if ebiten.IsKeyPressed(ebiten.KeySpace) {
-		shipIDs := scared.ProjectorEntityType.ListIdentifiers(func(et scared.EntityType) bool {
-			return et == scared.EntityTypeShip
+	instance.OperateConsumers()
+
+	var shipID uuid.UUID
+	{
+		shipIDs := projectors.ProjectorEntityType.ListIdentifiers(func(et model.EntityType) bool {
+			return et == model.EntityTypeShip
 		})
 		if len(shipIDs) != 0 {
-			g.ComposerExternalInputs[instance.EquipWeapon].TransitionByInput(shipIDs[0], ship.EffectArm, scared.WeaponMusketID.String())
+			shipID = shipIDs[0]
 		}
 	}
+
+	if shipID == uuid.Nil {
+		return nil
+	}
+
+	if inpututil.IsKeyJustPressed(ebiten.KeySpace) {
+		equippedWeaponIDs := projectors.ProjectorEquippedWeapon.ListIdentifiers(func(ew model.EquippedWeapon) bool {
+			return projectors.ProjectorEntityType.Project(ew.OwnerID) == model.EntityTypeShip
+		})
+
+		if len(equippedWeaponIDs) > 0 {
+			instance.SetActiveWeapon(equippedWeaponIDs[0])
+			log.Println("weapon activated")
+		} else {
+			log.Println("weapon assigned")
+			instance.AssignWeaponToEntityFunc(model.WeaponMusketID, shipID)
+		}
+	}
+	// if inpututil.IsKeyJustPressed(ebiten.KeyA) {
+	// 	instance.SetAcolyte(shipID, 2)
+	// }
+	// if inpututil.IsKeyJustPressed(ebiten.KeyS) {
+	// 	blessingAltarIDs := projectors.ProjectorBlessingAltar.ListIdentifiers()
+
+	// 	if len(blessingAltarIDs) > 0 {
+	// 		err := instance.TransferAcolyte(shipID, blessingAltarIDs[0], 1)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 	}
+	// }
 	if ebiten.IsKeyPressed(ebiten.Key1) {
-		equippedWeaponRuleSlotIDs := scared.ProjectorEquippedWeaponRuneSlot.ListIdentifiers()
+		equippedWeaponRuleSlotIDs := projectors.ProjectorEquippedWeaponRuneSlot.ListIdentifiers()
 		for _, runeSlotID := range equippedWeaponRuleSlotIDs {
-			runeSlot := scared.ProjectorEquippedWeaponRuneSlot.Project(runeSlotID)
-			if runeSlot.Type == scared.WeaponRuneSlotTypeDamage && runeSlot.RuneID == uuid.Nil {
-				g.ComposerExternalInputs[instance.EquipRune].TransitionByInput(runeSlotID, weapon.EffectRuneSlotRequest, scared.TimeTwoRuneID.String())
+			runeSlot := projectors.ProjectorEquippedWeaponRuneSlot.Project(runeSlotID)
+			if runeSlot.Type == model.WeaponRuneSlotTypeDamage && runeSlot.RuneID == uuid.Nil {
+				instance.SetRuneToEquippedWeaponRuneSlotFunc(model.TimeFourRuneID, runeSlotID)
 				break
 			}
 		}
 	}
 	if ebiten.IsKeyPressed(ebiten.Key2) {
-		equippedWeaponRuleSlotIDs := scared.ProjectorEquippedWeaponRuneSlot.ListIdentifiers()
+		equippedWeaponRuleSlotIDs := projectors.ProjectorEquippedWeaponRuneSlot.ListIdentifiers()
 		for _, runeSlotID := range equippedWeaponRuleSlotIDs {
-			runeSlot := scared.ProjectorEquippedWeaponRuneSlot.Project(runeSlotID)
-			if runeSlot.Type == scared.WeaponRuneSlotTypeRange && runeSlot.RuneID == uuid.Nil {
-				g.ComposerExternalInputs[instance.EquipRune].TransitionByInput(runeSlotID, weapon.EffectRuneSlotRequest, scared.TimeFourRuneID.String())
+			runeSlot := projectors.ProjectorEquippedWeaponRuneSlot.Project(runeSlotID)
+			if runeSlot.Type == model.WeaponRuneSlotTypeRange && runeSlot.RuneID == uuid.Nil {
+				instance.SetRuneToEquippedWeaponRuneSlotFunc(model.TimeFourRuneID, runeSlotID)
 				break
 			}
 		}
 	}
 	if inpututil.IsKeyJustPressed(ebiten.Key3) {
-		equippedWeaponRuleSlotIDs := scared.ProjectorEquippedWeaponRuneSlot.ListIdentifiers()
+		equippedWeaponRuleSlotIDs := projectors.ProjectorEquippedWeaponRuneSlot.ListIdentifiers()
 		for _, runeSlotID := range equippedWeaponRuleSlotIDs {
-			runeSlot := scared.ProjectorEquippedWeaponRuneSlot.Project(runeSlotID)
-			if runeSlot.Type == scared.WeaponRuneSlotTypeCoolDown && runeSlot.RuneID == uuid.Nil {
-				g.ComposerExternalInputs[instance.EquipRune].TransitionByInput(runeSlotID, weapon.EffectRuneSlotRequest, scared.TimeFourRuneID.String())
+			runeSlot := projectors.ProjectorEquippedWeaponRuneSlot.Project(runeSlotID)
+			if runeSlot.Type == model.WeaponRuneSlotTypeCoolDown && runeSlot.RuneID == uuid.Nil {
+				instance.SetRuneToEquippedWeaponRuneSlotFunc(model.TimeTwoRuneID, runeSlotID)
 				break
 			}
 		}
 	}
 
-	if ebiten.IsKeyPressed(ebiten.KeyP) {
-		g.ComposerExternalInputs[instance.SpawnShip].TransitionByInput(g.SpawnerIDMappings[scared.EntityTypeShip], spawnership.EffectSpawn, scared.ShipDawnBreakID.String())
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButton0) {
+		x, y := ebiten.CursorPosition()
+		instance.SetWaypointFunc(model.Waypoint{
+			OwnerID: shipID,
+			Type:    model.WaypointTypeToPosition,
+			Position: &model.Position{
+				X: x,
+				Y: y,
+			},
+		})
 	}
 
-	for _, composer := range g.ComposerLifeCycles {
-		composer.Operate()
-	}
-
-	for _, composer := range g.ComposerDestroyers {
-		composer.PlanDestroyIDs()
-	}
-	for _, composer := range g.ComposerDestroyers {
-		composer.Commit()
-	}
-
-	for _, composer := range g.ComposerSpawners {
-		composer.Operate()
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButton2) {
+		instance.SetWaypointFunc(model.Waypoint{
+			OwnerID:  shipID,
+			Type:     model.WaypointTypeIdle,
+			Position: nil,
+		})
 	}
 
 	return nil
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	positionProjector := scared.ProjectorPosition
+	devotionLayer := ebiten.NewImageFromImage(screen)
+	hitLayer := ebiten.NewImageFromImage(screen)
+	entityLayer := ebiten.NewImageFromImage(screen)
 
-	for _, id := range positionProjector.ListIdentifiers() {
-		entityType := scared.ProjectorEntityType.Project(id)
+	for _, a := range g.Animators {
+		for _, frame := range a.Frame() {
+			var layer *ebiten.Image
+			switch frame.RenderLayer {
+			case animator.RenderLayerHitMarker:
+				layer = hitLayer
+			case animator.RenderLayerEntity:
+				layer = entityLayer
+			}
 
-		var character string
-		switch entityType {
-		case scared.EntityTypeShip:
-			character = SHIP_CHARACTER
-		case scared.EntityTypeSoul:
-			character = SOUL_CHARACTER
+			var character string
+			switch true {
+			case bytes.Equal(frame.Image, animator.ImageHitMarker):
+				character = "x"
+			case bytes.Equal(frame.Image, animator.ImageSoul):
+				character = SOUL_CHARACTER
+			case bytes.Equal(frame.Image, animator.ImageShip):
+				character = SHIP_CHARACTER
+			case bytes.Equal(frame.Image, animator.ImageKnight):
+				character = KNIGHT_CHARACTER
+			case bytes.Equal(frame.Image, animator.ImageRunePlacement):
+				character = RUNE_CHARACTER
+			case bytes.Equal(frame.Image, animator.ImageChurch):
+				character = CHURCH_CHARACTER
+			}
+
+			ebitenutil.DebugPrintAt(layer, character, frame.RenderPosition.X, frame.RenderPosition.Y)
 		}
-
-		p := positionProjector.Project(id)
-		ebitenutil.DebugPrintAt(screen, character, p.X, p.Y)
 	}
+
+	var totalDevotion int
+	for _, id := range projectors.ProjectorDevotion.ListIdentifiers() {
+		totalDevotion += projectors.ProjectorDevotion.Project(id)
+	}
+
+	var shipID uuid.UUID
+	{
+		shipIDs := projectors.ProjectorEntityType.ListIdentifiers(func(et model.EntityType) bool {
+			return et == model.EntityTypeShip
+		})
+		if len(shipIDs) != 0 {
+			shipID = shipIDs[0]
+		}
+	}
+	ebitenutil.DebugPrintAt(devotionLayer, fmt.Sprintf("Devotion: %d, Acolytes: %d", totalDevotion, projectors.ProjectorAcolyte.Project(shipID)), 2, 2)
+
+	screen.DrawImage(hitLayer, nil)
+	screen.DrawImage(entityLayer, nil)
+	screen.DrawImage(devotionLayer, nil)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
@@ -129,25 +202,23 @@ func main() {
 	ebiten.SetWindowSize(640, 480)
 	ebiten.SetWindowTitle("Hello, World!")
 
-	scared.PositionSoulSpawn = scared.Position{
-		X: 10,
-		Y: 10,
+	model.PositionRunePlacement = model.Position{
+		X: 200,
+		Y: 200,
 	}
 
-	scared.PositionShipSpawn = scared.Position{
+	model.PositionShipSpawn = model.Position{
 		X: 200,
 		Y: 10,
 	}
 
+	animators := instance.InitAnimators()
+
 	instance.InitProjector()
+	instance.InitEntities()
 
 	if err := ebiten.RunGame(&Game{
-		ComposerLifeCycles:     instance.InitComposerLifeCycle(),
-		ComposerExternalInputs: instance.InitComposerExternalInput(),
-		ComposerSpawners:       instance.InitComposerSpawner(),
-		ComposerDestroyers:     instance.InitComposerDestroyer(),
-
-		SpawnerIDMappings: instance.InitSpawner(),
+		Animators: animators,
 	}); err != nil {
 		log.Fatal(err)
 	}

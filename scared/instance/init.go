@@ -3,98 +3,104 @@ package instance
 import (
 	"thief/base/engine"
 	"thief/scared"
-	"thief/scared/entitytype"
-	"thief/scared/health"
-	"thief/scared/position"
-	"thief/scared/scaredrune"
-	"thief/scared/ship"
-	"thief/scared/spawnership"
-	"thief/scared/spawnersoul"
-	"thief/scared/target"
-	"thief/scared/weapon"
+	"thief/scared/animator"
+	"thief/scared/model"
+	"thief/scared/projectors"
+	"thief/scared/statemachines/acolyte"
+	"thief/scared/statemachines/church"
+	"thief/scared/statemachines/devotion"
+	"thief/scared/statemachines/entitytype"
+	"thief/scared/statemachines/health"
+	"thief/scared/statemachines/position"
+	"thief/scared/statemachines/runeplacement"
+	"thief/scared/statemachines/ship"
+	"thief/scared/statemachines/spawnership"
+	"thief/scared/statemachines/target"
+	"thief/scared/statemachines/weapon"
 
 	"github.com/google/uuid"
 )
 
 var (
-	StorePosition               = engine.NewStore()
-	StoreEntityType             = engine.NewStore()
-	StoreHealth                 = engine.NewStore()
-	StoreTarget                 = engine.NewStore()
-	StoreEquippedWeapon         = engine.NewStore()
-	StoreEquippedWeaponRuneSlot = engine.NewStore()
-	StoreEquippedRune           = engine.NewStore()
-	StoreSpawnerShip            = engine.NewStore()
-	StoreSpawnerSoul            = engine.NewStore()
-	StoreShipGuard              = engine.NewStore()
+	storePosition               = engine.NewStore("Position")
+	storeEntityType             = engine.NewStore("EntityType")
+	storeHealth                 = engine.NewStore("Health")
+	storeTarget                 = engine.NewStore("Target")
+	storeEquippedWeapon         = engine.NewStore("EquippedWeapon")
+	storeEquippedWeaponRuneSlot = engine.NewStore("EquippedWeaponRuneSlot")
+
+	storeSpawnerShip = engine.NewStore("SpawnerShip")
+	storeShipGuard   = engine.NewStore("ShipGuard")
+
+	storeRunePlacement = engine.NewStore("RunePlacement")
+	storeSoul          = engine.NewStore("Soul")
+
+	storeDevotion          = engine.NewStore("Devotion")
+	storeDevotionGenerator = engine.NewStore("DevotionGenerator")
+
+	storeShipBlessingAltar = engine.NewStore("ShipBlessingAltar")
+
+	storeKnight = engine.NewStore("Knight")
+
+	storeAcolyte = engine.NewStore("Acolyte")
+
+	storeChurch = engine.NewStore("Church")
 )
 
-func InitSpawner() map[scared.EntityType]uuid.UUID {
-	spawnerShipID := uuid.New()
+func InitEntities() {
+	scared.DevotionID = uuid.New()
 
-	StoreSpawnerShip.AppendEvent(engine.Event{
-		ID:       uuid.New(),
-		EntityID: spawnerShipID,
-		Effect:   engine.EffectInit,
-	})
+	storeDevotion.AppendEvent(devotion.EffectInit.NewEvent(scared.DevotionID, 100))
 
-	spawnerSoulID := uuid.New()
+	storeDevotionGenerator.AppendEvent(devotion.EffectGeneratorInit.NewEvent(scared.DevotionID, 30))
 
-	StoreSpawnerSoul.AppendEvent(engine.Event{
-		ID:       uuid.New(),
-		EntityID: spawnerSoulID,
-		Effect:   engine.EffectInit,
-	})
+	storeSpawnerShip.AppendEvent(spawnership.EffectInit.NewEvent(uuid.New(), nil))
 
-	return map[scared.EntityType]uuid.UUID{
-		scared.EntityTypeShip: spawnerShipID,
-	}
+	storeRunePlacement.AppendEvent(runeplacement.EffectInit.NewEvent(uuid.New(), model.SpawnRunePlacementData{
+		Position: model.PositionRunePlacement,
+	}))
+
+	storeChurch.AppendEvent(church.EffectInit.NewEvent(uuid.New(), model.Position{X: 100, Y: 50}))
 }
 
 func InitProjector() {
-	scared.ProjectorEntityType = engine.NewStoreProjector[scared.EntityType](StoreEntityType,
-		engine.NewFieldEffectMapping[scared.EntityType]([]engine.Effect{engine.EffectInit}, func(_ scared.EntityType, nextEventData interface{}) scared.EntityType {
-			return nextEventData.(scared.EntityType)
+	projectors.ProjectorEntityType = engine.NewStoreProjector(storeEntityType,
+		engine.NewFieldEffectMapping([]engine.Effect[model.EntityType]{entitytype.EffectInit}, func(_ model.EntityType, nextEventData model.EntityType) model.EntityType {
+			return nextEventData
 		}),
 	)
 
-	scared.ProjectorPosition = engine.NewStoreProjector[scared.Position](StorePosition,
-		engine.NewFieldEffectMapping[scared.Position]([]engine.Effect{engine.EffectInit}, func(_ scared.Position, nextEventData interface{}) scared.Position {
-			bPosition := nextEventData.(scared.Position)
-
-			return scared.Position{
-				X: bPosition.X,
-				Y: bPosition.Y,
+	projectors.ProjectorPosition = engine.NewStoreProjector(storePosition,
+		engine.NewFieldEffectMapping([]engine.Effect[model.Position]{position.EffectInit}, func(_ model.Position, nextEventData model.Position) model.Position {
+			return model.Position{
+				X: nextEventData.X,
+				Y: nextEventData.Y,
 			}
 		}),
-		engine.NewFieldEffectMapping[scared.Position]([]engine.Effect{position.EffectMove}, func(currentData scared.Position, nextEventData interface{}) scared.Position {
-			bPosition := nextEventData.(scared.Position)
-
-			return scared.Position{
-				X: currentData.X + bPosition.X,
-				Y: currentData.Y + bPosition.Y,
+		engine.NewFieldEffectMapping([]engine.Effect[model.Position]{position.EffectMove}, func(currentData model.Position, nextEventData model.Position) model.Position {
+			return model.Position{
+				X: currentData.X + nextEventData.X,
+				Y: currentData.Y + nextEventData.Y,
 			}
 		}),
 	)
 
-	scared.ProjectorEquippedWeapon = engine.NewStoreProjector[scared.EquippedWeapon](StoreEquippedWeapon,
-		engine.NewFieldEffectMapping[scared.EquippedWeapon]([]engine.Effect{engine.EffectInit}, func(_ scared.EquippedWeapon, nextEventData interface{}) scared.EquippedWeapon {
-			return nextEventData.(scared.EquippedWeapon)
+	projectors.ProjectorEquippedWeapon = engine.NewStoreProjector(storeEquippedWeapon,
+		engine.NewFieldEffectMapping([]engine.Effect[model.EquippedWeapon]{weapon.EffectInit}, func(_ model.EquippedWeapon, nextEventData model.EquippedWeapon) model.EquippedWeapon {
+			return nextEventData
 		}),
 	)
 
-	scared.ProjectorEquippedWeaponCoolDown = engine.NewStoreProjector[int](StoreEquippedWeapon,
-		engine.NewFieldEffectMapping[int]([]engine.Effect{engine.EffectInit}, func(currentData int, nextEventData interface{}) int {
-			equippedWeapon := nextEventData.(scared.EquippedWeapon)
-			template := scared.WeaponTemplates[equippedWeapon.TemplateID]
+	projectors.ProjectorEquippedWeaponCoolDown = engine.NewStoreProjector(storeEquippedWeapon,
+		engine.NewFieldEffectMapping([]engine.Effect[model.EquippedWeapon]{weapon.EffectInit}, func(currentData int, nextEventData model.EquippedWeapon) int {
+			template := model.TemplateWeapons[nextEventData.TemplateID]
 
 			weaponCoolDown := template.CoolDown
 
-			for _, runeSlotID := range equippedWeapon.RuneSlotIDs {
-				runeSlot := scared.ProjectorEquippedWeaponRuneSlot.Project(runeSlotID)
-				if runeSlot.Type == scared.WeaponRuneSlotTypeCoolDown && runeSlot.RuneID != uuid.Nil {
-					rune := scared.ProjectorEquippedRune.Project(runeSlot.RuneID)
-					weaponCoolDown = weaponCoolDown / scared.RuneTemplates[rune.TemplateID].Modifier.Minus
+			for _, runeSlotID := range nextEventData.RuneSlotIDs {
+				runeSlot := projectors.ProjectorEquippedWeaponRuneSlot.Project(runeSlotID)
+				if runeSlot.Type == model.WeaponRuneSlotTypeCoolDown && runeSlot.RuneID != uuid.Nil {
+					weaponCoolDown = weaponCoolDown / model.RuneTemplates[runeSlot.RuneID].Modifier.Minus
 				}
 			}
 
@@ -102,29 +108,25 @@ func InitProjector() {
 		}),
 	)
 
-	scared.ProjectorEquippedWeaponCoolDownCount = engine.NewStoreProjector[int](StoreEquippedWeapon,
-		engine.NewFieldEffectMapping[int]([]engine.Effect{weapon.EffectHitEnemy}, func(currentData int, nextEventData interface{}) int {
-			weaponLog := nextEventData.(scared.WeaponLog)
-
-			return currentData + weaponLog.CoolDown
+	projectors.ProjectorEquippedWeaponCoolDownCount = engine.NewStoreProjector(storeEquippedWeapon,
+		engine.NewFieldEffectMapping([]engine.Effect[model.WeaponLog]{weapon.EffectHitEnemy}, func(currentData int, nextEventData model.WeaponLog) int {
+			return currentData + nextEventData.CoolDown
 		}),
-		engine.NewFieldEffectMapping[int]([]engine.Effect{weapon.EffectCoolDown}, func(currentData int, nextEventData interface{}) int {
-			return currentData - 1
+		engine.NewFieldEffectMapping([]engine.Effect[int]{weapon.EffectCoolDown}, func(currentData int, nextEventData int) int {
+			return currentData - nextEventData
 		}),
 	)
 
-	scared.ProjectorEquippedWeaponRange = engine.NewStoreProjector[int](StoreEquippedWeapon,
-		engine.NewFieldEffectMapping[int]([]engine.Effect{engine.EffectInit}, func(currentData int, nextEventData interface{}) int {
-			equippedWeapon := nextEventData.(scared.EquippedWeapon)
-			template := scared.WeaponTemplates[equippedWeapon.TemplateID]
+	projectors.ProjectorEquippedWeaponRange = engine.NewStoreProjector(storeEquippedWeapon,
+		engine.NewFieldEffectMapping([]engine.Effect[model.EquippedWeapon]{weapon.EffectInit}, func(currentData int, nextEventData model.EquippedWeapon) int {
+			template := model.TemplateWeapons[nextEventData.TemplateID]
 
 			weaponRange := template.Range
 
-			for _, runeSlotID := range equippedWeapon.RuneSlotIDs {
-				runeSlot := scared.ProjectorEquippedWeaponRuneSlot.Project(runeSlotID)
-				if runeSlot.Type == scared.WeaponRuneSlotTypeRange && runeSlot.RuneID != uuid.Nil {
-					rune := scared.ProjectorEquippedRune.Project(runeSlot.RuneID)
-					weaponRange = weaponRange * scared.RuneTemplates[rune.TemplateID].Modifier.Plus
+			for _, runeSlotID := range nextEventData.RuneSlotIDs {
+				runeSlot := projectors.ProjectorEquippedWeaponRuneSlot.Project(runeSlotID)
+				if runeSlot.Type == model.WeaponRuneSlotTypeRange && runeSlot.RuneID != uuid.Nil {
+					weaponRange = weaponRange * model.RuneTemplates[runeSlot.RuneID].Modifier.Plus
 				}
 			}
 
@@ -132,19 +134,17 @@ func InitProjector() {
 		}),
 	)
 
-	scared.ProjectorEquippedWeaponDamage = engine.NewStoreProjector[scared.Stat](StoreEquippedWeapon,
-		engine.NewFieldEffectMapping[scared.Stat]([]engine.Effect{engine.EffectInit}, func(currentData scared.Stat, nextEventData interface{}) scared.Stat {
-			equippedWeapon := nextEventData.(scared.EquippedWeapon)
-			template := scared.WeaponTemplates[equippedWeapon.TemplateID]
+	projectors.ProjectorEquippedWeaponDamage = engine.NewStoreProjector(storeEquippedWeapon,
+		engine.NewFieldEffectMapping([]engine.Effect[model.EquippedWeapon]{weapon.EffectInit}, func(currentData model.Stat, nextEventData model.EquippedWeapon) model.Stat {
+			template := model.TemplateWeapons[nextEventData.TemplateID]
 
 			damage := template.Damage
 
-			for _, runeSlotID := range equippedWeapon.RuneSlotIDs {
-				runeSlot := scared.ProjectorEquippedWeaponRuneSlot.Project(runeSlotID)
-				if runeSlot.Type == scared.WeaponRuneSlotTypeDamage && runeSlot.RuneID != uuid.Nil {
-					rune := scared.ProjectorEquippedRune.Project(runeSlot.RuneID)
-					damage.Minus = damage.Minus * scared.RuneTemplates[rune.TemplateID].Modifier.Minus
-					damage.Plus = damage.Plus * scared.RuneTemplates[rune.TemplateID].Modifier.Plus
+			for _, runeSlotID := range nextEventData.RuneSlotIDs {
+				runeSlot := projectors.ProjectorEquippedWeaponRuneSlot.Project(runeSlotID)
+				if runeSlot.Type == model.WeaponRuneSlotTypeDamage && runeSlot.RuneID != uuid.Nil {
+					damage.Minus = damage.Minus * model.RuneTemplates[runeSlot.RuneID].Modifier.Minus
+					damage.Plus = damage.Plus * model.RuneTemplates[runeSlot.RuneID].Modifier.Plus
 				}
 			}
 
@@ -152,109 +152,167 @@ func InitProjector() {
 		}),
 	)
 
-	scared.ProjectorEquippedWeaponRuneSlot = engine.NewStoreProjector[scared.WeaponRuneSlot](StoreEquippedWeaponRuneSlot,
-		engine.NewFieldEffectMapping[scared.WeaponRuneSlot]([]engine.Effect{engine.EffectInit}, func(_ scared.WeaponRuneSlot, nextEventData interface{}) scared.WeaponRuneSlot {
-			return scared.WeaponRuneSlot{
-				Type: nextEventData.(scared.WeaponRuneSlotType),
+	projectors.ProjectorEquippedWeaponDevotionCost = engine.NewStoreProjector(storeEquippedWeapon,
+		engine.NewFieldEffectMapping([]engine.Effect[model.EquippedWeapon]{weapon.EffectInit}, func(currentData int, nextEventData model.EquippedWeapon) int {
+			var cost int
+
+			for _, runeSlotID := range nextEventData.RuneSlotIDs {
+				runeSlot := projectors.ProjectorEquippedWeaponRuneSlot.Project(runeSlotID)
+				if runeSlot.Type == model.WeaponRuneSlotTypeDamage && runeSlot.RuneID != uuid.Nil {
+					cost += model.RuneTemplates[runeSlot.RuneID].DevotionCost
+				}
+			}
+
+			return cost
+		}),
+	)
+
+	projectors.ProjectorEquippedWeaponRuneSlot = engine.NewStoreProjector(storeEquippedWeaponRuneSlot,
+		engine.NewFieldEffectMapping([]engine.Effect[model.WeaponRuneSlotType]{weapon.EffectRuneSlotInit}, func(_ model.WeaponRuneSlot, nextEventData model.WeaponRuneSlotType) model.WeaponRuneSlot {
+			return model.WeaponRuneSlot{
+				Type: nextEventData,
 			}
 		}),
-		engine.NewFieldEffectMapping[scared.WeaponRuneSlot]([]engine.Effect{weapon.EffectRuneSlotActive}, func(currentData scared.WeaponRuneSlot, nextEventData interface{}) scared.WeaponRuneSlot {
-			currentData.RuneID = nextEventData.(uuid.UUID)
+		engine.NewFieldEffectMapping([]engine.Effect[uuid.UUID]{weapon.EffectRuneSlotActive}, func(currentData model.WeaponRuneSlot, nextEventData uuid.UUID) model.WeaponRuneSlot {
+			currentData.RuneID = nextEventData
 			return currentData
 		}),
 	)
 
-	scared.ProjectorEquippedRune = engine.NewStoreProjector[scared.EquippedRune](StoreEquippedRune,
-		engine.NewFieldEffectMapping[scared.EquippedRune]([]engine.Effect{engine.EffectInit}, func(_ scared.EquippedRune, nextEventData interface{}) scared.EquippedRune {
-			return nextEventData.(scared.EquippedRune)
+	projectorRuneToEquippedWeaponRuneSlot := newProjectorRuneToEquippedWeaponRuneSlot()
+	SetRuneToEquippedWeaponRuneSlotFunc = projectorRuneToEquippedWeaponRuneSlot.AddRuneToRuneSlot
+	projectors.ProjectorRuneTemplateForEquippedWeaponRuneSlot = projectorRuneToEquippedWeaponRuneSlot
+
+	projectors.ProjectorWeaponHitLogs = engine.NewStoreProjector(storeEquippedWeapon,
+		engine.NewFieldEffectMapping([]engine.Effect[model.WeaponLog]{weapon.EffectHitEnemy}, func(currentData []model.Log[model.Stat], nextEventData model.WeaponLog) []model.Log[model.Stat] {
+			return append(currentData, nextEventData.Log)
 		}),
 	)
 
-	scared.ProjectorWeaponHitLogs = engine.NewStoreProjector[[]scared.Log[int]](StoreEquippedWeapon,
-		engine.NewFieldEffectMapping[[]scared.Log[int]]([]engine.Effect{weapon.EffectHitEnemy}, func(currentData []scared.Log[int], nextEventData interface{}) []scared.Log[int] {
-			log := nextEventData.(scared.WeaponLog)
-			return append(currentData, log.Log)
+	projectors.ProjectorHealth = engine.NewStoreProjector(storeHealth,
+		engine.NewFieldEffectMapping([]engine.Effect[int]{health.EffectHit}, func(currentData int, nextEventData int) int {
+			return currentData + nextEventData
+		}),
+		engine.NewFieldEffectMapping([]engine.Effect[int]{health.EffectInit}, func(currentData int, nextEventData int) int {
+			return nextEventData
 		}),
 	)
 
-	scared.ProjectorHealth = engine.NewStoreProjector[int](StoreHealth,
-		engine.NewFieldEffectMapping[int]([]engine.Effect{health.EffectHit}, func(currentData int, nextEventData interface{}) int {
-			logs := nextEventData.([]scared.Log[int])
+	projectors.ProjectorTarget = engine.NewStoreProjector(storeTarget,
+		engine.NewFieldEffectMapping([]engine.Effect[uuid.UUID]{target.EffectSelectTarget, target.EffectReleaseTarget}, func(_ uuid.UUID, nextEventData uuid.UUID) uuid.UUID {
+			return nextEventData
+		}),
+	)
 
-			minus := 0
-			plus := 0
+	projectorWaypoint := newProjectorWaypoint()
+	SetWaypointFunc = projectorWaypoint.SetWaypoint
+	projectors.ProjectorWaypoint = projectorWaypoint
 
-			for _, log := range logs {
-				minus += log.Minus
-				plus += log.Plus
+	projectorEntityAssignedWeapon := newProjectorEntityAssignedWeapon()
+	AssignWeaponToEntityFunc = projectorEntityAssignedWeapon.AssignWeaponToEntity
+	projectors.ProjectorEntityAssignedWeapon = projectorEntityAssignedWeapon
+
+	projectors.ProjectorDevotion = engine.NewStoreProjector(storeDevotion,
+		engine.NewFieldEffectMapping([]engine.Effect[int]{devotion.EffectInit}, func(currentData int, nextEffectData int) int {
+			return nextEffectData
+		}),
+		engine.NewFieldEffectMapping([]engine.Effect[int]{devotion.EffectConsume}, func(currentData int, nextEffectData int) int {
+			return currentData - nextEffectData
+		}),
+		engine.NewFieldEffectMapping([]engine.Effect[int]{devotion.EffectAdd}, func(currentData int, nextEffectData int) int {
+			return currentData + nextEffectData
+		}),
+	)
+
+	projectors.ProjectorDevotionGeneratorCoolDown = engine.NewStoreProjector(storeDevotionGenerator,
+		engine.NewFieldEffectMapping([]engine.Effect[int]{devotion.EffectGeneratorInit}, func(currentData int, nextEffectData int) int {
+			return nextEffectData
+		}),
+	)
+
+	projectors.ProjectorDevotionGeneratorCoolDownCount = engine.NewStoreProjector(storeDevotionGenerator,
+		engine.NewFieldEffectMapping([]engine.Effect[int]{devotion.EffectGeneratorRun}, func(currentData int, nextEventData int) int {
+			return currentData + nextEventData
+		}),
+		engine.NewFieldEffectMapping([]engine.Effect[int]{devotion.EffectGeneratorCoolDown}, func(currentData int, nextEventData int) int {
+			return currentData - 1
+		}),
+	)
+
+	projectorActiveWeapon := newProjectorActiveWeapon()
+	SetActiveWeapon = projectorActiveWeapon.SetActiveWeapon
+	projectors.ProjectorActiveWeapon = projectorActiveWeapon
+
+	// SetAcolyte = projectorAcolyte.SetAcolyte
+	// TransferAcolyte = projectorAcolyte.TransformerAcolyte
+	projectors.ProjectorAcolyte = engine.NewStoreProjector(storeAcolyte,
+		engine.NewFieldEffectMapping([]engine.Effect[int]{acolyte.EffectInit}, func(currentData int, nextEventData int) int {
+			return nextEventData
+		}),
+		engine.NewFieldEffectMapping([]engine.Effect[int]{acolyte.EffectDeposit}, func(currentData int, nextEventData int) int {
+			return currentData + nextEventData
+		}),
+		engine.NewFieldEffectMapping([]engine.Effect[int]{acolyte.EffectWithdraw}, func(currentData int, nextEventData int) int {
+			return currentData - nextEventData
+		}),
+	)
+
+	projectors.ProjectorBlessingAltar = engine.NewStoreProjector(storeShipBlessingAltar,
+		engine.NewFieldEffectMapping([]engine.Effect[uuid.UUID]{ship.EffectBlessingAltarInit}, func(currentData model.BlessingAltarData, nextEventData uuid.UUID) model.BlessingAltarData {
+			return model.BlessingAltarData{
+				OwnerID: nextEventData,
 			}
-
-			return currentData + plus - minus
 		}),
-		engine.NewFieldEffectMapping[int]([]engine.Effect{engine.EffectInit}, func(currentData int, nextEventData interface{}) int {
-			return nextEventData.(int)
+		engine.NewFieldEffectMapping([]engine.Effect[model.SpawnKnightData]{ship.EffectBlessAcolyteToKnight}, func(currentData model.BlessingAltarData, nextEventData model.SpawnKnightData) model.BlessingAltarData {
+			currentData.NumberOfBlessedAcolyte += 1
+			return currentData
 		}),
 	)
 
-	scared.ProjectorConsumedWeaponHitLogs = engine.NewStoreProjector[[]uuid.UUID](StoreHealth,
-		engine.NewFieldEffectMapping[[]uuid.UUID]([]engine.Effect{health.EffectHit}, func(currentData []uuid.UUID, nextEventData interface{}) []uuid.UUID {
-			logs := nextEventData.([]scared.Log[int])
-			ids := []uuid.UUID{}
-			for _, log := range logs {
-				ids = append(ids, log.ID)
+	projectors.ProjectorRunePlacement = engine.NewStoreProjector(storeRunePlacement,
+		engine.NewFieldEffectMapping([]engine.Effect[model.SpawnRunePlacementData]{runeplacement.EffectInit}, func(currentData model.RunePlacementData, nextEventData model.SpawnRunePlacementData) model.RunePlacementData {
+			return model.RunePlacementData{
+				Position: nextEventData.Position,
 			}
-
-			return append(currentData, ids...)
+		}),
+		engine.NewFieldEffectMapping([]engine.Effect[model.SpawnSoulData]{runeplacement.EffectSpawnGuardian}, func(currentData model.RunePlacementData, nextEventData model.SpawnSoulData) model.RunePlacementData {
+			currentData.SpawnedSoulIDs = append(currentData.SpawnedSoulIDs, nextEventData.ID)
+			return currentData
 		}),
 	)
-
-	scared.ProjectorTarget = engine.NewStoreProjector[uuid.UUID](StoreTarget,
-		engine.NewFieldEffectMapping[uuid.UUID]([]engine.Effect{target.EffectSelectTarget}, func(_ uuid.UUID, nextEventData interface{}) uuid.UUID {
-			return nextEventData.(uuid.UUID)
-		}),
-	)
-}
-
-func InitComposerLifeCycle() []*engine.ComposerLifeCycle {
-	return []*engine.ComposerLifeCycle{
-		engine.NewComposerLifeCycle(StorePosition, position.StateMachine),
-		engine.NewComposerLifeCycle(StoreTarget, target.StateMachine),
-		engine.NewComposerLifeCycle(StoreEquippedWeapon, weapon.StateMachineEquippedWeapon),
-		engine.NewComposerLifeCycle(StoreEquippedWeaponRuneSlot, weapon.LifeCycleStateMachineEquippedWeaponRuneSlot),
-		engine.NewComposerLifeCycle(StoreHealth, health.StateMachine),
-		engine.NewComposerLifeCycle(StoreEntityType, entitytype.StateMachine),
-		engine.NewComposerLifeCycle(StoreSpawnerSoul, spawnersoul.StateMachine),
-	}
-}
-
-func InitComposerSpawner() []*engine.ComposerSpawner {
-	return []*engine.ComposerSpawner{
-		engine.NewComposerSpawner(StoreSpawnerShip, spawnership.EffectSpawn, spawnership.NewSpawner(StorePosition, StoreEntityType, StoreHealth, StoreShipGuard)),
-		engine.NewComposerSpawner(StoreSpawnerSoul, spawnersoul.EffectSpawn, spawnersoul.NewSpawner(StorePosition, StoreEntityType, StoreTarget, StoreHealth)),
-		engine.NewComposerSpawner(StoreShipGuard, ship.EffectArm, weapon.NewSpawnerEquippedWeapon(StoreEquippedWeapon, StoreEquippedWeaponRuneSlot)),
-		engine.NewComposerSpawner(StoreEquippedWeaponRuneSlot, weapon.EffectRuneSlotRequest, scaredrune.NewSpawnerEquippedRune(StoreEquippedRune)),
-	}
-}
-
-func InitComposerDestroyer() []*engine.ComposerDestroyer {
-	return []*engine.ComposerDestroyer{
-		engine.NewComposerDestroyer(StoreHealth, health.StateMachine),
-		engine.NewComposerDestroyer(StoreTarget, target.StateMachine),
-		engine.NewComposerDestroyer(StorePosition, position.StateMachine),
-		engine.NewComposerDestroyer(StoreEntityType, entitytype.StateMachine),
-	}
 }
 
 const (
-	SpawnShip   = "SpawnShip"
-	EquipWeapon = "EquipWeapon"
-	EquipRune   = "EquipRune"
+	SpawnShip      = "SpawnShip"
+	ChangeWayPoint = "ChangeWayPoint"
+	EquipWeapon    = "EquipWeapon"
+	EquipRune      = "EquipRune"
 )
 
-func InitComposerExternalInput() map[string]*engine.ComposerExternalInput {
-	return map[string]*engine.ComposerExternalInput{
-		SpawnShip:   engine.NewComposerExternalInput(StoreSpawnerShip, spawnership.StateMachine),
-		EquipWeapon: engine.NewComposerExternalInput(StoreShipGuard, ship.StateMachine),
-		EquipRune:   engine.NewComposerExternalInput(StoreEquippedWeaponRuneSlot, weapon.ExternalInputStateMachineEquippedWeaponRuneSlot),
+func InitAnimators() []engine.Animator {
+	projectileAnimator := animator.NewProjectileAnimator()
+	storeEquippedWeapon.AddHook(projectileAnimator.GetHook())
+
+	soulAnimator := animator.NewSoulAnimator()
+	shipAnimator := animator.NewShipAnimator()
+	knightAnimator := animator.NewKnightAnimator()
+	churchAnimator := animator.NewChurchAnimator()
+
+	storeEntityType.AddHook(soulAnimator.GetHook())
+	storeEntityType.AddHook(shipAnimator.GetHook())
+	storeEntityType.AddHook(knightAnimator.GetHook())
+
+	storeChurch.AddHook(churchAnimator.GetHook())
+
+	runePlacementAnimator := animator.NewRunePlacementAnimator()
+	storeRunePlacement.AddHook(runePlacementAnimator.GetHook())
+
+	return []engine.Animator{
+		projectileAnimator,
+		soulAnimator,
+		shipAnimator,
+		knightAnimator,
+		runePlacementAnimator,
+		churchAnimator,
 	}
 }

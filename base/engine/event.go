@@ -6,27 +6,42 @@ import (
 	"github.com/google/uuid"
 )
 
-type Effect string
+type Effect[model any] string
 
-const (
-	EffectInit Effect = "INIT"
-)
+func (e Effect[model]) ToState(outputState State) transition {
+	return transition{
+		effect:      string(e),
+		outputState: outputState,
+	}
+}
+
+func (e Effect[model]) ToStateWhen(outputState State, transitionFunc func(selfID uuid.UUID) (model, bool)) transition {
+	tf := func(selfID uuid.UUID) (any, bool) {
+		return transitionFunc(selfID)
+	}
+
+	return transition{
+		effect:         string(e),
+		outputState:    outputState,
+		transitionFunc: tf,
+	}
+}
+
+func (e Effect[model]) NewEvent(entityID uuid.UUID, data model) Event {
+	return Event{
+		ID:       uuid.New(),
+		Effect:   string(e),
+		EntityID: entityID,
+		Data:     data,
+	}
+}
 
 type Event struct {
 	ID       uuid.UUID
 	EntityID uuid.UUID
 
-	Effect Effect
+	Effect string
 	Data   interface{}
 
 	CreatedAt time.Time
-}
-
-func initEvent(effect Effect, entityID uuid.UUID, data interface{}) Event {
-	return Event{
-		ID:       uuid.New(),
-		Effect:   effect,
-		EntityID: entityID,
-		Data:     data,
-	}
 }

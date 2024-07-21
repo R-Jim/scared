@@ -14,30 +14,38 @@ type Projector[model any] interface {
 }
 
 type effectMapping[model any] struct {
-	effects       []Effect
-	aggregateFunc func(currentData model, nextEffectData interface{}) model
+	effects       []string
+	aggregateFunc func(currentData model, nextEffectData any) model
 }
 
-func NewFieldEffectMapping[model any](effects []Effect, aggregateFunc func(currentData model, nextEffectData interface{}) model) effectMapping[model] {
+func NewFieldEffectMapping[model, effectModel any](effects []Effect[effectModel], aggregateFunc func(currentData model, nextEffectData effectModel) model) effectMapping[model] {
+	es := []string{}
+	for _, effect := range effects {
+		es = append(es, string(effect))
+	}
+	af := func(currentData model, nextEffectData any) model {
+		return aggregateFunc(currentData, nextEffectData.(effectModel))
+	}
+
 	return effectMapping[model]{
-		effects:       effects,
-		aggregateFunc: aggregateFunc,
+		effects:       es,
+		aggregateFunc: af,
 	}
 }
 
-type storeProjector[model any] struct {
+type StoreProjector[model any] struct {
 	store          *Store
 	effectMappings []effectMapping[model]
 }
 
 func NewStoreProjector[model any](store *Store, effectMappings ...effectMapping[model]) Projector[model] {
-	return storeProjector[model]{
+	return StoreProjector[model]{
 		store:          store,
 		effectMappings: effectMappings,
 	}
 }
 
-func (p storeProjector[model]) Project(identifier uuid.UUID) model {
+func (p StoreProjector[model]) Project(identifier uuid.UUID) model {
 	var result model
 
 	events, err := p.store.GetEventsByEntityID(identifier)
@@ -65,7 +73,7 @@ func (p storeProjector[model]) Project(identifier uuid.UUID) model {
 	return result
 }
 
-func (p storeProjector[model]) ListIdentifiers(filters ...func(m model) bool) []uuid.UUID {
+func (p StoreProjector[model]) ListIdentifiers(filters ...func(m model) bool) []uuid.UUID {
 	eventsMap := p.store.GetEvents()
 
 	identifiers := []uuid.UUID{}
@@ -88,7 +96,7 @@ func (p storeProjector[model]) ListIdentifiers(filters ...func(m model) bool) []
 	return identifiers
 }
 
-func (p storeProjector[model]) ListDeletedIdentifiers(filters ...func(m model) bool) []uuid.UUID {
+func (p StoreProjector[model]) ListDeletedIdentifiers(filters ...func(m model) bool) []uuid.UUID {
 	eventsMap := p.store.destroyedEventsSet
 
 	identifiers := []uuid.UUID{}
@@ -111,7 +119,7 @@ func (p storeProjector[model]) ListDeletedIdentifiers(filters ...func(m model) b
 	return identifiers
 }
 
-func (p storeProjector[model]) IsDestroyed(identifier uuid.UUID) bool {
+func (p StoreProjector[model]) IsDestroyed(identifier uuid.UUID) bool {
 	_, isExist := p.store.destroyedEventsSet[identifier]
 	return isExist
 }

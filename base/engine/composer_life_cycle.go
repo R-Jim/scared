@@ -2,6 +2,12 @@ package engine
 
 import (
 	"log"
+
+	"github.com/google/uuid"
+)
+
+const (
+	StateDestroyed State = "Destroyed"
 )
 
 func NewComposerLifeCycle(store *Store, sm stateMachine) *ComposerLifeCycle {
@@ -12,23 +18,36 @@ func NewComposerLifeCycle(store *Store, sm stateMachine) *ComposerLifeCycle {
 }
 
 type ComposerLifeCycle struct {
-	store        *Store
-	stateMachine stateMachine
+	store               *Store
+	stateMachine        stateMachine
+	plannedDestroyedIDs []uuid.UUID
 }
 
-func (c ComposerLifeCycle) Operate() {
+func (c *ComposerLifeCycle) Operate() {
 	resultEvents := []Event{}
 
 	for id, events := range c.store.GetEvents() {
-		currentState := c.stateMachine.GetState(events)
+		currentState := c.stateMachine.getState(events)
 
-		for effect, gate := range c.stateMachine.nodes[currentState] {
-			if data, isUnlocked := gate.outputUnlockFunc(id); isUnlocked {
-				resultEvents = append(resultEvents, initEvent(effect, id, data))
-				if gate.outputState != currentState {
-					break
-				}
+		for _, transition := range c.stateMachine.nodes[currentState] {
+			if transition.transitionFunc == nil {
+				continue
 			}
+
+			if data, isUnlocked := transition.transitionFunc(id); isUnlocked {
+				resultEvents = append(resultEvents, Event{
+					ID:       uuid.New(),
+					EntityID: id,
+					Effect:   transition.effect,
+					Data:     data,
+				})
+				currentState = transition.outputState
+				break
+			}
+		}
+
+		if currentState == StateDestroyed {
+			c.plannedDestroyedIDs = append(c.plannedDestroyedIDs, id)
 		}
 	}
 
@@ -37,4 +56,16 @@ func (c ComposerLifeCycle) Operate() {
 			log.Fatal(err)
 		}
 	}
+}
+
+func (c *ComposerLifeCycle) CommitDestroyedIDs() {
+	if len(c.plannedDestroyedIDs) > 0 {
+		log.Printf("[%s] remove IDs: %v\n", c.store.name, c.plannedDestroyedIDs)
+	}
+
+	for _, entityID := range c.plannedDestroyedIDs {
+		c.store.destroySet(entityID)
+	}
+
+	c.plannedDestroyedIDs = []uuid.UUID{}
 }

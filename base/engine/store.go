@@ -1,19 +1,25 @@
 package engine
 
 import (
+	"log"
+
 	"github.com/google/uuid"
 )
 
 type Store struct {
+	name    string
 	counter *int // used to check if a store has new events
 
 	eventsSet          map[uuid.UUID][]Event
 	destroyedEventsSet map[uuid.UUID][]Event
+
+	hooks []Hook
 }
 
-func NewStore() *Store {
+func NewStore(name string) *Store {
 	defaultCounter := 0
 	return &Store{
+		name:               name,
 		eventsSet:          make(map[uuid.UUID][]Event),
 		destroyedEventsSet: make(map[uuid.UUID][]Event),
 		counter:            &defaultCounter,
@@ -25,6 +31,10 @@ func (i Store) GetEventsByEntityID(id uuid.UUID) ([]Event, error) {
 }
 
 func (i *Store) AppendEvent(e Event) error {
+	if e.ID == uuid.Nil {
+		log.Fatalf("fail to append, no event ID, event: %v", e)
+	}
+
 	events := i.eventsSet[e.EntityID]
 	if events == nil {
 		events = []Event{}
@@ -32,6 +42,11 @@ func (i *Store) AppendEvent(e Event) error {
 
 	i.eventsSet[e.EntityID] = append(events, e)
 	(*i.counter)++
+
+	for _, hook := range i.hooks {
+		hook(e)
+	}
+
 	return nil
 }
 
@@ -52,4 +67,8 @@ func (i *Store) destroySet(id uuid.UUID) {
 func (i *Store) IsDestroyed(id uuid.UUID) bool {
 	_, isExist := i.destroyedEventsSet[id]
 	return isExist
+}
+
+func (i *Store) AddHook(hook Hook) {
+	i.hooks = append(i.hooks, hook)
 }
